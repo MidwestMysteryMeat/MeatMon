@@ -58,10 +58,12 @@
       "x": 8,
       "y": 4,
       "facing": "down",
+      "heals": true,
       "dialogue": [
         "Welcome to the MeatMon engine demo!",
         "Drop a PNG into assets/custom while playing and it hot-reloads.",
-        "The trainer to the east never shuts up about her Puddlit."
+        "The trainer to the east never shuts up about her Puddlit.",
+        "You look tired. Let me patch your team up."
       ]
     },
     {

@@ -28,7 +28,10 @@ build\apps\game\Debug\meatmon.exe
 - **F1** — open the in-engine editor: map/tile painting, entity editor,
   species editor, team builder, battle tester, sprite pixel editor, and a
   raw file editor. See [EDITOR.md](EDITOR.md).
-- Esc (overworld) — quit
+- **F5 / F9** — save / load (`game/saves/save.json`, versioned JSON). Quitting
+  autosaves. Party HP and status persist between battles — the villager heals
+  your team (any entity with `"heals": true` does).
+- Esc (overworld) — save and quit
 
 ## Author an NPC or trainer (no code)
 

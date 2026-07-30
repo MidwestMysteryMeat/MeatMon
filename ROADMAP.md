@@ -28,7 +28,11 @@ competitive battles?* If no, it doesn't get a phase.
 - [ ] Dialogue box + input routing for overworld UI (font exists; box is
       battle-only so far)
 - [ ] Audio via miniaudio or SDL: BGM + SFX, data-driven per map/event
-- [ ] Save/load v1 (versioned JSON): position, flags, party
+- [x] Save/load v1 (versioned JSON, `game/saves/save.json`): position/facing,
+      defeated trainers, playtime, party with carried HP + status (battles
+      start from party state; wipe = auto-heal); F5 save, F9 load, autosave
+      on quit; healer NPC via `"heals": true` entity flag
+- [ ] Save v2: script flags/vars, bag, boxes, multi-map position, migrations
 
 ## Phase 2 — Overworld gameplay
 

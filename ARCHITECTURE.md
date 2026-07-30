@@ -227,9 +227,12 @@ gitignored — sprite rips are copyrighted and stay on local disks only.
 
 ## 9. Saves
 
-JSON (versioned `"save_version"` field, migrations run oldest→newest) for
-party, boxes, bag, dex flags, script vars, position. Binary packing is a
-Phase 7 optimization only if profiling demands it.
+JSON with a versioned `"save_version"` field (migrations run oldest→newest).
+v1 is live: position/facing, defeated trainers, playtime, and the party as
+`MonsterSet` JSON with carried `hp`/`status` — battles start from party
+state (`Battle::start` honours carried HP/status and skips fainted leads)
+and write results back. Boxes, bag, dex flags, and script vars join in v2.
+Binary packing is a Phase 7 optimization only if profiling demands it.
 
 ## 10. Conventions
 

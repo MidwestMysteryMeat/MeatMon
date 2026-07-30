@@ -7,6 +7,7 @@
 
 #include <meatmon/battle/battle.hpp>
 #include <meatmon/battle/calc.hpp>
+#include <meatmon/battle/team.hpp>
 
 #include <cstdio>
 #include <filesystem>
@@ -241,6 +242,47 @@ int main(int argc, char** argv) {
             {{.species = "puddlit", .moves = {"growl"}}});
         playTurns(b, 8, 0, 0);
         CHECK(logContains(b, "|cant|p2a: Puddlit|flinch"));
+    }
+
+    // --- carried party state: HP override + fainted lead skipped -------------------
+    {
+        MonsterSet down{.species = "emberling", .moves = {"tackle"}};
+        down.hp = 0;                                 // fainted from a prior fight
+        MonsterSet hurt{.species = "sprigling", .moves = {"tackle"}};
+        hurt.hp = 12;
+        Battle b(dex, Format{}, 21);
+        b.setPlayer(0, "A", {down, hurt});
+        b.setPlayer(1, "B", {{.species = "puddlit", .moves = {"growl"}}});
+        b.start();
+        CHECK(b.side(0).active == 1);                // fainted lead skipped
+        CHECK(b.side(0).monsters[1].hp == 12);
+        CHECK(logContains(b, "|switch|p1a: Sprigling|Sprigling, L50|12/120"));
+    }
+
+    // --- carried status: burn ticks on turn 1 ---------------------------------------
+    {
+        MonsterSet burned{.species = "emberling", .moves = {"growl"}};
+        burned.status = "brn";
+        Battle b(dex, Format{}, 22);
+        b.setPlayer(0, "A", {burned});
+        b.setPlayer(1, "B", {{.species = "puddlit", .moves = {"growl"}}});
+        b.start();
+        playTurns(b, 1, 0, 0);
+        CHECK(logContains(b, "[from] brn"));
+    }
+
+    // --- team JSON round-trip preserves carried state --------------------------------
+    {
+        MonsterSet s{.species = "zapkin", .level = 42, .nature = "timid",
+                     .ability = "static", .item = "leftovers",
+                     .moves = {"thundershock"}};
+        s.hp = 7;
+        s.status = "par";
+        auto back = teamFromJson(teamToJson({s}));
+        CHECK(back.size() == 1);
+        CHECK(back[0].species == "zapkin" && back[0].level == 42);
+        CHECK(back[0].hp == 7 && back[0].status == "par");
+        CHECK(back[0].item == "leftovers" && back[0].nature == "timid");
     }
 
     // --- struggle kicks in when PP runs dry, with recoil, and ends the battle -------

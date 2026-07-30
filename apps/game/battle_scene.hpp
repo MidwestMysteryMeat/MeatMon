@@ -30,6 +30,7 @@ public:
 
     bool finished() const { return done_; }
     bool playerWon() const { return battle_ && battle_->winner() == 0; }
+    const mm::battle::Battle* battle() const { return battle_.get(); }
     bool sawMove() const { return sawMove_; }   // selftest probe
 
 private:

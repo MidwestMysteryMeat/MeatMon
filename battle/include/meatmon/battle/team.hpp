@@ -16,4 +16,9 @@ namespace mm::battle {
 MonsterSet monsterSetFromJson(const nlohmann::json& j);
 std::vector<MonsterSet> teamFromJson(const nlohmann::json& array);
 
+// Round-trip (saves, editor, network). Carried hp/status are written only
+// when set, so authored team files stay clean.
+nlohmann::json monsterSetToJson(const MonsterSet& set);
+nlohmann::json teamToJson(const std::vector<MonsterSet>& team);
+
 } // namespace mm::battle

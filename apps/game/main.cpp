@@ -69,6 +69,9 @@ public:
             return false;
         }
         if (!loadPlayer()) return false;
+        if (!selftest_ && loadGame()) {      // resume; selftest stays pristine
+            std::puts("[MeatMon] save loaded (F5 saves, F9 reloads)");
+        }
 
         const float ts = static_cast<float>(map_.tileSize);
         player_.curX = player_.prevX = player_.tx * ts;
@@ -80,6 +83,7 @@ public:
     }
 
     void handleEvent(const SDL_Event& ev) override {
+        if (ev.type == SDL_EVENT_QUIT && !selftest_) saveGame();   // autosave
         if (editorOpen_) {
             if (editor_) editor_->processEvent(ev);
             if (ev.type == SDL_EVENT_KEY_DOWN && !ev.key.repeat &&
@@ -106,11 +110,19 @@ public:
         }
         if (mode_ != Mode::Overworld) return;
 
-        if (k == SDLK_ESCAPE) app_->quit();
-        else if (confirm) tryInteract();
-        else if (k == SDLK_B) {
+        if (k == SDLK_ESCAPE) {
+            if (!selftest_) saveGame();      // autosave on quit
+            app_->quit();
+        } else if (confirm) {
+            tryInteract();
+        } else if (k == SDLK_B) {
             const MapEntity* t = firstTrainer();
             if (t) beginTrainerBattle(*t);
+        } else if (k == SDLK_F5) {
+            saveGame();
+            toast("(Game saved.)");
+        } else if (k == SDLK_F9) {
+            toast(loadGame() ? "(Game loaded.)" : "(No save found.)");
         }
     }
 
@@ -279,17 +291,52 @@ private:
         if (dlg_.empty()) dlg_.push_back("...");
         dlgSpeaker_ = e->extra.value("name", e->id);
         pendingTrainer_ = (e->type == "trainer" && !beaten) ? *e : MapEntity{};
+        pendingHeal_ = e->extra.value("heals", false);
         mode_ = Mode::Dialogue;
     }
 
     void advanceDialogue() {
         if (!dlg_.empty()) dlg_.pop_front();
         if (!dlg_.empty()) return;
+        if (pendingHeal_) {
+            pendingHeal_ = false;
+            healParty();
+            dlg_.push_back("(Your team was fully healed!)");
+            return;
+        }
         if (pendingTrainer_.type == "trainer") {
+            if (!partyAlive()) {
+                pendingTrainer_ = MapEntity{};
+                dlg_.push_back("(Your team is in no shape to battle...)");
+                return;
+            }
             mode_ = Mode::ToBattle;
             transitionT_ = 0;
         } else {
             mode_ = Mode::Overworld;
+        }
+    }
+
+    void toast(std::string msg) {
+        dlgSpeaker_.clear();
+        dlg_.clear();
+        dlg_.push_back(std::move(msg));
+        pendingTrainer_ = MapEntity{};
+        pendingHeal_ = false;
+        mode_ = Mode::Dialogue;
+    }
+
+    bool partyAlive() const {
+        for (const auto& s : playerTeam_) {
+            if (s.hp != 0) return true;      // -1 = full, >0 = damaged
+        }
+        return false;
+    }
+
+    void healParty() {
+        for (auto& s : playerTeam_) {
+            s.hp = -1;
+            s.status.clear();
         }
     }
 
@@ -314,12 +361,73 @@ private:
     }
 
     void endBattle() {
+        if (const auto* b = battleScene_->battle()) {   // party HP/status carry
+            const auto& mons = b->side(0).monsters;
+            for (size_t i = 0; i < playerTeam_.size() && i < mons.size(); ++i) {
+                playerTeam_[i].hp = mons[i].hp;
+                playerTeam_[i].status = mons[i].status;
+            }
+        }
         if (battleScene_->playerWon() && !pendingTrainer_.id.empty()) {
             defeated_.insert(pendingTrainer_.id);
         }
         pendingTrainer_ = MapEntity{};
         battleScene_.reset();
-        mode_ = Mode::Overworld;
+        if (!partyAlive()) {
+            healParty();
+            dlgSpeaker_.clear();
+            dlg_.clear();
+            dlg_.push_back("You have no monsters left...");
+            dlg_.push_back("(Your team was rushed to rest and fully healed.)");
+            mode_ = Mode::Dialogue;
+        } else {
+            mode_ = Mode::Overworld;
+        }
+    }
+
+    void saveGame() {
+        nlohmann::json j;
+        j["save_version"] = 1;
+        j["map"] = "demo";
+        j["player"] = {{"x", player_.tx}, {"y", player_.ty},
+                       {"fdx", player_.fdx}, {"fdy", player_.fdy}};
+        j["playtime_ticks"] = playtimeBase_ + ticks_;
+        j["defeated"] = defeated_;
+        j["party"] = battle::teamToJson(playerTeam_);
+        std::error_code ec;
+        std::filesystem::create_directories(gameDir_ / "saves", ec);
+        std::ofstream f(gameDir_ / "saves" / "save.json");
+        if (f) {
+            f << j.dump(2) << "\n";
+            SDL_Log("saved game");
+        } else {
+            SDL_Log("save FAILED");
+        }
+    }
+
+    bool loadGame() {
+        std::ifstream f(gameDir_ / "saves" / "save.json");
+        if (!f) return false;
+        auto j = nlohmann::json::parse(f, nullptr, false);
+        if (j.is_discarded() || j.value("save_version", 0) != 1) return false;
+        player_.tx = player_.ttx = j["player"].value("x", 3);
+        player_.ty = player_.tty = j["player"].value("y", 3);
+        player_.fdx = j["player"].value("fdx", 0);
+        player_.fdy = j["player"].value("fdy", 1);
+        player_.t = 1.f;
+        const float ts = static_cast<float>(map_.tileSize);
+        player_.curX = player_.prevX = player_.tx * ts;
+        player_.curY = player_.prevY = player_.ty * ts;
+        defeated_.clear();
+        for (const auto& id : j.value("defeated", std::vector<std::string>{})) {
+            defeated_.insert(id);
+        }
+        if (j.contains("party")) {
+            auto party = battle::teamFromJson(j["party"]);
+            if (!party.empty()) playerTeam_ = std::move(party);
+        }
+        playtimeBase_ = j.value("playtime_ticks", 0ULL);
+        return true;
     }
 
     void updateOverworld(double dt) {
@@ -397,7 +505,9 @@ private:
     std::deque<std::string> dlg_;
     std::string dlgSpeaker_;
     MapEntity pendingTrainer_;
-    std::set<std::string> defeated_;            // runtime only; saves in Phase 1
+    bool pendingHeal_ = false;
+    std::set<std::string> defeated_;            // persisted in save.json
+    uint64_t playtimeBase_ = 0;
 
     uint64_t ticks_ = 0;
 };

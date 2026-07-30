@@ -86,6 +86,11 @@ void Battle::start() {
             p.stats.spd = calc::otherStat(sp->baseStats.spd, set.ivs.spd, set.evs.spd, set.level, natureNum(nat, "spd"));
             p.stats.spe = calc::otherStat(sp->baseStats.spe, set.ivs.spe, set.evs.spe, set.level, natureNum(nat, "spe"));
             p.hp = p.stats.hp;
+            if (set.hp >= 0) p.hp = std::min(set.hp, p.stats.hp);
+            if (!set.status.empty() && !p.fainted()) {
+                p.status = set.status;
+                if (p.status == "slp") p.sleepTurns = 1 + static_cast<int>(rng_.next(3));
+            }
 
             for (const auto& mid : set.moves) {
                 const Move* mv = dex_.move(mid);
@@ -108,8 +113,14 @@ void Battle::start() {
     log_.push_back("|teamsize|p1|" + std::to_string(sides_[0].monsters.size()));
     log_.push_back("|teamsize|p2|" + std::to_string(sides_[1].monsters.size()));
     log_.push_back("|start");
-    switchIn(0, 0);
-    switchIn(1, 0);
+    for (int s = 0; s < 2; ++s) {           // lead = first able monster
+        int lead = -1;
+        for (int i = 0; i < static_cast<int>(sides_[s].monsters.size()); ++i) {
+            if (!sides_[s].monsters[i].fainted()) { lead = i; break; }
+        }
+        if (lead < 0) throw std::runtime_error("Battle: side has no able monster");
+        switchIn(s, lead);
+    }
     onSwitchInAbility(0);       // both leads are in before abilities fire
     onSwitchInAbility(1);
     beginTurn();

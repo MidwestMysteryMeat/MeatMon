@@ -19,6 +19,10 @@ struct MonsterSet {
     StatTable evs{};
     StatTable ivs{31, 31, 31, 31, 31, 31};
     std::vector<std::string> moves;          // move ids
+    // Carried party state (RPG saves): battles start from these instead of
+    // a fresh monster. hp -1 = full; hp 0 = fainted (skipped as lead).
+    int hp = -1;
+    std::string status;                      // "", brn, par, psn, tox, slp, frz
 };
 
 struct MoveSlot {
