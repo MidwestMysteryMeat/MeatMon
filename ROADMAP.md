@@ -68,7 +68,12 @@ Runs in parallel with 1–2; `battle/` has no engine dependencies.
 - [x] Volatiles: confusion, flinch, substitute (absorbs hits/status until it
       breaks, blocks opponent-targeted status moves while up)
 - [ ] Remaining volatiles as content needs them (leech seed, taunt, encore, ...)
-- [ ] Abilities + items as data + hook points; weather and terrain
+- [x] Abilities + items as data + hook points (Intimidate/Levitate/pinch-
+      boost/contact-status; Leftovers/berries)
+- [x] Weather: rain/sun (1.5x/0.5x water and fire damage), sandstorm/hail
+      (1/16 max HP end-of-turn chip, rock/ground/steel and ice immune),
+      5-turn duration set by field moves
+- [ ] Terrain (electric/grassy/misty/psychic)
 - [ ] Full move effect coverage (multi-hit, charge, protect, switch moves,
       hazards, healing, recoil-by-fraction)
 - [ ] Doubles/Triples: multi-slot sides, targeting rules

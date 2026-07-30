@@ -456,6 +456,7 @@ void Battle::executeMove(int atkSide, int moveIndex) {
         if (!move->boosts.empty()) applyBoosts(tgt, move->boosts);
         if (!move->status.empty()) applyStatus(tgt, move->status);
         if (!move->volatileStatus.empty()) applyVolatile(tgt, move->volatileStatus);
+        if (!move->weather.empty()) setWeather(move->weather);
         return;
     }
 
@@ -495,6 +496,13 @@ void Battle::executeMove(int atkSide, int moveIndex) {
         }
     }
     dmg = static_cast<int>(dmg * typeMult);
+    if (weather_ == "rain") {
+        if (move->type == "water") dmg = dmg * 3 / 2;
+        else if (move->type == "fire") dmg /= 2;
+    } else if (weather_ == "sun") {
+        if (move->type == "fire") dmg = dmg * 3 / 2;
+        else if (move->type == "water") dmg /= 2;
+    }
     if (physical && user.status == "brn") dmg /= 2;   // burn: 0.5x physical
     if (dmg < 1) dmg = 1;
 
@@ -557,10 +565,45 @@ void Battle::executeMove(int atkSide, int moveIndex) {
     }
 }
 
+void Battle::setWeather(const std::string& w) {
+    weather_ = w;
+    weatherTurns_ = 5;
+    log_.push_back("|-weather|" + weather_);
+}
+
+void Battle::weatherDamage(int side) {
+    if (weather_ != "sandstorm" && weather_ != "hail") return;
+    auto& p = active(side);
+    if (p.fainted()) return;
+    auto hasType = [&](const char* ty) {
+        return std::find(p.species->types.begin(), p.species->types.end(), ty) !=
+               p.species->types.end();
+    };
+    bool immune = weather_ == "sandstorm"
+                      ? (hasType("rock") || hasType("ground") || hasType("steel"))
+                      : hasType("ice");
+    if (immune) return;
+    int dmg = std::max(1, p.stats.hp / 16);
+    p.hp = std::max(0, p.hp - dmg);
+    log_.push_back("|-damage|" + tag(side) + "|" + hpOf(p) + "|[from] " + weather_);
+    checkFaint(side);
+}
+
 void Battle::endOfTurn() {
     int first = 0;
     int s0 = effSpe(active(0)), s1 = effSpe(active(1));
     if (s1 > s0 || (s1 == s0 && rng_.chance(1, 2))) first = 1;
+
+    if (!weather_.empty()) {
+        for (int k = 0; k < 2 && phase_ != Phase::Ended; ++k) {
+            weatherDamage(k == 0 ? first : 1 - first);
+        }
+        if (phase_ == Phase::Ended) return;
+        if (--weatherTurns_ <= 0) {
+            log_.push_back("|-weather|end|" + weather_);
+            weather_.clear();
+        }
+    }
 
     for (int k = 0; k < 2 && phase_ != Phase::Ended; ++k) {
         int side = k == 0 ? first : 1 - first;
@@ -621,6 +664,8 @@ std::string Battle::serialize() const {
     j["winner"] = winner_;
     j["rngState"] = rng_.state();
     j["format"] = format_.id;
+    j["weather"] = weather_;
+    j["weatherTurns"] = weatherTurns_;
     for (int s = 0; s < 2; ++s) {
         nlohmann::json js;
         js["name"] = sides_[s].name;

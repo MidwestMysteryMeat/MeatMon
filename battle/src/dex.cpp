@@ -85,6 +85,7 @@ Dex Dex::load(const std::filesystem::path& dataDir) {
         }
         mv.targetSelf = v.value("target", "foe") == std::string("self");
         mv.contact = v.value("contact", false);
+        mv.weather = v.value("weather", "");
         dex.moves_.emplace(id, std::move(mv));
     }
 

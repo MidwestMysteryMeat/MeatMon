@@ -308,6 +308,28 @@ int main(int argc, char** argv) {
         CHECK(logContains(b, "|-activate|p1a: Emberling|Substitute|[damage]"));
     }
 
+    // --- weather: rain sets the field, ticks for 5 turns, then clears ---------------
+    {
+        Battle b = makeBattle(dex, 60,
+            {{.species = "puddlit", .moves = {"raindance", "growl"}}},
+            {{.species = "emberling", .moves = {"growl"}}});
+        playTurns(b, 1, 0, 0);
+        CHECK(logContains(b, "|-weather|rain"));
+        CHECK(b.weather() == "rain");
+        playTurns(b, 4, 1, 0);   // 4 more turns: 5 total, weather should end
+        CHECK(logContains(b, "|-weather|end|rain"));
+        CHECK(b.weather().empty());
+    }
+
+    // --- sandstorm chips non-rock/ground/steel types each end of turn ---------------
+    {
+        Battle b = makeBattle(dex, 61,
+            {{.species = "zapkin", .moves = {"sandstorm", "growl"}}},
+            {{.species = "emberling", .moves = {"growl"}}});
+        playTurns(b, 1, 0, 0);
+        CHECK(logContains(b, "[from] sandstorm"));
+    }
+
     // --- struggle kicks in when PP runs dry, with recoil, and ends the battle -------
     {
         Battle b = makeBattle(dex, 314,

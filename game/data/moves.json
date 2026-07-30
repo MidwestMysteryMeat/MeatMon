@@ -149,5 +149,49 @@
     "pp": 10,
     "target": "self",
     "volatile": "substitute"
+  },
+  "raindance": {
+    "name": "Rain Dance",
+    "type": "water",
+    "category": "status",
+    "power": 0,
+    "accuracy": -1,
+    "priority": 0,
+    "pp": 5,
+    "target": "self",
+    "weather": "rain"
+  },
+  "sunnyday": {
+    "name": "Sunny Day",
+    "type": "fire",
+    "category": "status",
+    "power": 0,
+    "accuracy": -1,
+    "priority": 0,
+    "pp": 5,
+    "target": "self",
+    "weather": "sun"
+  },
+  "sandstorm": {
+    "name": "Sandstorm",
+    "type": "rock",
+    "category": "status",
+    "power": 0,
+    "accuracy": -1,
+    "priority": 0,
+    "pp": 10,
+    "target": "self",
+    "weather": "sandstorm"
+  },
+  "hail": {
+    "name": "Hail",
+    "type": "ice",
+    "category": "status",
+    "power": 0,
+    "accuracy": -1,
+    "priority": 0,
+    "pp": 10,
+    "target": "self",
+    "weather": "hail"
   }
 }

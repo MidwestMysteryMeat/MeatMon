@@ -107,6 +107,7 @@ public:
     int turn() const { return turn_; }
     const std::vector<std::string>& log() const { return log_; }
     const Side& side(int i) const { return sides_[i]; }   // read-only view
+    const std::string& weather() const { return weather_; }   // "" = clear
 
     // JSON snapshot (turn, sides, HP/PP, RNG state, log) for network sync
     // and replays. Full restore round-trip is Phase 3 (see ROADMAP).
@@ -131,6 +132,8 @@ private:
     void onSwitchInAbility(int side);        // Intimidate-style triggers
     void maybeEatBerry(int side);            // consumable heal-below-half items
     int effSpe(const BattleMonster& p) const;
+    void setWeather(const std::string& w);   // field move: rain/sun/sandstorm/hail
+    void weatherDamage(int side);            // sandstorm/hail chip damage
 
     const Dex& dex_;
     Format format_;
@@ -142,6 +145,8 @@ private:
     Phase phase_ = Phase::Setup;
     int turn_ = 0;
     int winner_ = -1;
+    std::string weather_;
+    int weatherTurns_ = 0;
     std::vector<std::string> log_;
 };
 

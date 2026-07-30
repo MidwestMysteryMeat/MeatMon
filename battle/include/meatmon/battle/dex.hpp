@@ -39,6 +39,7 @@ struct Move {
     std::vector<std::pair<std::string, int>> boosts;  // stat stage changes
     bool targetSelf = false;         // boosts/status apply to the user
     bool contact = false;            // makes contact (Static-style triggers)
+    std::string weather;             // field move: "rain"/"sun"/"sandstorm"/"hail"
 };
 
 // Abilities/items are declarative data fields interpreted by the sim.
