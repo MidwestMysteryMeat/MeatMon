@@ -145,6 +145,7 @@ void Battle::switchIn(int side, int index) {
     p.toxicN = 0;           // tox residual counter resets
     p.confusionTurns = 0;   // volatiles clear on switch
     p.flinched = false;
+    p.substituteHp = 0;
     std::ostringstream os;
     os << "|switch|" << tag(side) << "|" << p.species->name << ", L" << p.level
        << "|" << hpOf(p);
@@ -354,6 +355,19 @@ void Battle::applyVolatile(int targetSide, const std::string& vol) {
         // Only meaningful if the target hasn't acted yet this turn;
         // never persists past the turn (cleared in endOfTurn).
         if (!t.movedThisTurn) t.flinched = true;
+    } else if (vol == "substitute") {
+        if (t.substituteHp > 0) {
+            log_.push_back("|-fail|" + tag(targetSide));
+            return;
+        }
+        int cost = t.stats.hp / 4;
+        if (cost <= 0 || t.hp <= cost) {
+            log_.push_back("|-fail|" + tag(targetSide));
+            return;
+        }
+        t.hp -= cost;
+        t.substituteHp = cost;
+        log_.push_back("|-start|" + tag(targetSide) + "|Substitute");
     }
 }
 
@@ -435,6 +449,10 @@ void Battle::executeMove(int atkSide, int moveIndex) {
 
     if (move->category == MoveCategory::Status) {
         int tgt = move->targetSelf ? atkSide : defSide;
+        if (tgt == defSide && target.substituteHp > 0) {
+            log_.push_back("|-fail|" + tag(atkSide));
+            return;
+        }
         if (!move->boosts.empty()) applyBoosts(tgt, move->boosts);
         if (!move->status.empty()) applyStatus(tgt, move->status);
         if (!move->volatileStatus.empty()) applyVolatile(tgt, move->volatileStatus);
@@ -484,25 +502,40 @@ void Battle::executeMove(int atkSide, int moveIndex) {
     if (typeMult > 1.0) log_.push_back("|-supereffective|" + tag(defSide));
     else if (typeMult < 1.0) log_.push_back("|-resisted|" + tag(defSide));
 
-    target.hp = std::max(0, target.hp - dmg);
-    log_.push_back("|-damage|" + tag(defSide) + "|" + hpOf(target));
+    bool hitSub = target.substituteHp > 0;
+    if (hitSub) {
+        // The substitute absorbs the hit; no HP, status or faint for the
+        // real monster, and no leftover damage carries past it breaking.
+        if (dmg >= target.substituteHp) {
+            target.substituteHp = 0;
+            log_.push_back("|-end|" + tag(defSide) + "|Substitute");
+        } else {
+            target.substituteHp -= dmg;
+            log_.push_back("|-activate|" + tag(defSide) + "|Substitute|[damage]");
+        }
+    } else {
+        target.hp = std::max(0, target.hp - dmg);
+        log_.push_back("|-damage|" + tag(defSide) + "|" + hpOf(target));
 
-    if (!target.fainted() && move->type == "fire" && target.status == "frz") {
-        target.status.clear();
-        log_.push_back("|-curestatus|" + tag(defSide) + "|frz");
+        if (!target.fainted() && move->type == "fire" && target.status == "frz") {
+            target.status.clear();
+            log_.push_back("|-curestatus|" + tag(defSide) + "|frz");
+        }
+
+        checkFaint(defSide);
+        if (phase_ == Phase::Ended) return;
     }
 
-    checkFaint(defSide);
-    if (phase_ == Phase::Ended) return;
-
     if (!target.fainted()) {
-        if (!move->secondaryStatus.empty() &&
-            rng_.chance(static_cast<uint32_t>(move->secondaryChance), 100)) {
-            applyStatus(defSide, move->secondaryStatus);
-        }
-        if (!move->secondaryVolatile.empty() &&
-            rng_.chance(static_cast<uint32_t>(move->secondaryChance), 100)) {
-            applyVolatile(defSide, move->secondaryVolatile);
+        if (!hitSub) {                         // substitute blocks secondaries
+            if (!move->secondaryStatus.empty() &&
+                rng_.chance(static_cast<uint32_t>(move->secondaryChance), 100)) {
+                applyStatus(defSide, move->secondaryStatus);
+            }
+            if (!move->secondaryVolatile.empty() &&
+                rng_.chance(static_cast<uint32_t>(move->secondaryChance), 100)) {
+                applyVolatile(defSide, move->secondaryVolatile);
+            }
         }
         if (move->contact && !target.ability.empty()) {   // Static-style
             const Ability* ab = dex_.ability(target.ability);
@@ -603,6 +636,7 @@ std::string Battle::serialize() const {
             jp["ability"] = p.ability;
             jp["item"] = p.item;
             jp["confusion"] = p.confusionTurns;
+            jp["substitute"] = p.substituteHp;
             for (const auto& m : p.moves) {
                 jp["moves"].push_back({{"id", m.id}, {"pp", m.pp}});
             }

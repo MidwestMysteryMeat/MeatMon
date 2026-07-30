@@ -47,6 +47,7 @@ struct BattleMonster {
     std::string item;                // item id ("" once consumed)
     int confusionTurns = 0;          // volatile: remaining confusion attempts
     bool flinched = false;           // volatile: cleared each turn
+    int substituteHp = 0;            // volatile: 0 = none, absorbs hits/status
     bool movedThisTurn = false;
 
     bool fainted() const { return hp <= 0; }

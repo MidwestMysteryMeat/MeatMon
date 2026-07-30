@@ -285,6 +285,29 @@ int main(int argc, char** argv) {
         CHECK(back[0].item == "leftovers" && back[0].nature == "timid");
     }
 
+    // --- substitute: costs 1/4 max HP and blocks a status move the same turn --------
+    {
+        Battle b = makeBattle(dex, 50,
+            {{.species = "emberling", .moves = {"substitute"}}},
+            {{.species = "puddlit", .moves = {"growl"}}});
+        playTurns(b, 1, 0, 0);   // Emberling (spe 65) acts before Puddlit (spe 43)
+        CHECK(logContains(b, "|-start|p1a: Emberling|Substitute"));
+        CHECK(b.side(0).monsters[0].hp == 114 - 114 / 4);
+        CHECK(logContains(b, "|-fail|p2a: Puddlit"));           // growl blocked
+        CHECK(!logContains(b, "|-unboost|p1a: Emberling|atk"));
+    }
+
+    // --- substitute absorbs hits until it breaks, then damage reaches real HP -------
+    {
+        Battle b = makeBattle(dex, 51,
+            {{.species = "emberling", .moves = {"substitute", "growl"}}},
+            {{.species = "puddlit", .moves = {"tackle", "tackle"}}});
+        playTurns(b, 1, 0, 0);
+        playTurns(b, 6, 1, 1);
+        CHECK(logContains(b, "|-end|p1a: Emberling|Substitute"));
+        CHECK(logContains(b, "|-activate|p1a: Emberling|Substitute|[damage]"));
+    }
+
     // --- struggle kicks in when PP runs dry, with recoil, and ends the battle -------
     {
         Battle b = makeBattle(dex, 314,

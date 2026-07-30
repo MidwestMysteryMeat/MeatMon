@@ -65,7 +65,9 @@ Runs in parallel with 1–2; `battle/` has no engine dependencies.
 - [x] Struggle (auto when PP dry) with 1/4 recoil
 - [x] Regression suite (`battle_tests`, wired into CTest): stat formulas,
       type chart, determinism, status/boost/struggle golden scenarios
-- [ ] Volatiles (confusion, flinch, substitute, etc.)
+- [x] Volatiles: confusion, flinch, substitute (absorbs hits/status until it
+      breaks, blocks opponent-targeted status moves while up)
+- [ ] Remaining volatiles as content needs them (leech seed, taunt, encore, ...)
 - [ ] Abilities + items as data + hook points; weather and terrain
 - [ ] Full move effect coverage (multi-hit, charge, protect, switch moves,
       hazards, healing, recoil-by-fraction)

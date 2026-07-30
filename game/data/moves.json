@@ -138,5 +138,16 @@
     "pp": 20,
     "target": "self",
     "boosts": { "atk": 2 }
+  },
+  "substitute": {
+    "name": "Substitute",
+    "type": "normal",
+    "category": "status",
+    "power": 0,
+    "accuracy": -1,
+    "priority": 0,
+    "pp": 10,
+    "target": "self",
+    "volatile": "substitute"
   }
 }
