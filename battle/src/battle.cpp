@@ -28,7 +28,7 @@ int* boostField(StatTable& b, const std::string& key) {
 }
 
 // "hp/max" plus the status suffix Showdown-style hp strings carry.
-std::string hpOf(const BattlePokemon& p) {
+std::string hpOf(const BattleMonster& p) {
     std::string s = std::to_string(p.hp) + "/" + std::to_string(p.stats.hp);
     if (!p.status.empty() && !p.fainted()) s += " " + p.status;
     return s;
@@ -51,8 +51,8 @@ const Move kStruggle = [] {
 } // namespace
 
 bool Side::hasReplacement() const {
-    for (int i = 0; i < static_cast<int>(pokemon.size()); ++i) {
-        if (i != active && !pokemon[i].fainted()) return true;
+    for (int i = 0; i < static_cast<int>(monsters.size()); ++i) {
+        if (i != active && !monsters[i].fainted()) return true;
     }
     return false;
 }
@@ -60,7 +60,7 @@ bool Side::hasReplacement() const {
 Battle::Battle(const Dex& dex, Format format, uint64_t seed, Prng::Mode rngMode)
     : dex_(dex), format_(std::move(format)), rng_(seed, rngMode) {}
 
-void Battle::setPlayer(int side, std::string name, std::vector<PokemonSet> team) {
+void Battle::setPlayer(int side, std::string name, std::vector<MonsterSet> team) {
     sides_[side].name = std::move(name);
     sides_[side].team = std::move(team);
 }
@@ -75,7 +75,7 @@ void Battle::start() {
             if (!sp) throw std::runtime_error("Battle: unknown species " + set.species);
             const Nature* nat = dex_.nature(set.nature);
 
-            BattlePokemon p;
+            BattleMonster p;
             p.species = sp;
             p.name = set.name.empty() ? sp->name : set.name;
             p.level = set.level;
@@ -92,27 +92,35 @@ void Battle::start() {
                 if (!mv) throw std::runtime_error("Battle: unknown move " + mid);
                 p.moves.push_back({mv->id, mv->pp, mv->pp});
             }
-            side.pokemon.push_back(std::move(p));
+            if (!set.ability.empty() && !dex_.ability(set.ability))
+                throw std::runtime_error("Battle: unknown ability " + set.ability);
+            if (!set.item.empty() && !dex_.item(set.item))
+                throw std::runtime_error("Battle: unknown item " + set.item);
+            p.ability = set.ability;
+            p.item = set.item;
+            side.monsters.push_back(std::move(p));
         }
     }
 
     log_.push_back("|player|p1|" + sides_[0].name);
     log_.push_back("|player|p2|" + sides_[1].name);
     log_.push_back("|gametype|" + format_.id);
-    log_.push_back("|teamsize|p1|" + std::to_string(sides_[0].pokemon.size()));
-    log_.push_back("|teamsize|p2|" + std::to_string(sides_[1].pokemon.size()));
+    log_.push_back("|teamsize|p1|" + std::to_string(sides_[0].monsters.size()));
+    log_.push_back("|teamsize|p2|" + std::to_string(sides_[1].monsters.size()));
     log_.push_back("|start");
     switchIn(0, 0);
     switchIn(1, 0);
+    onSwitchInAbility(0);       // both leads are in before abilities fire
+    onSwitchInAbility(1);
     beginTurn();
 }
 
-BattlePokemon& Battle::active(int side) {
-    return sides_[side].pokemon[sides_[side].active];
+BattleMonster& Battle::active(int side) {
+    return sides_[side].monsters[sides_[side].active];
 }
 
-const BattlePokemon& Battle::active(int side) const {
-    return sides_[side].pokemon[sides_[side].active];
+const BattleMonster& Battle::active(int side) const {
+    return sides_[side].monsters[sides_[side].active];
 }
 
 std::string Battle::tag(int side) const {
@@ -124,6 +132,8 @@ void Battle::switchIn(int side, int index) {
     auto& p = active(side);
     p.boosts = {};          // stages don't persist through a switch
     p.toxicN = 0;           // tox residual counter resets
+    p.confusionTurns = 0;   // volatiles clear on switch
+    p.flinched = false;
     std::ostringstream os;
     os << "|switch|" << tag(side) << "|" << p.species->name << ", L" << p.level
        << "|" << hpOf(p);
@@ -135,7 +145,33 @@ void Battle::beginTurn() {
     log_.push_back("|turn|" + std::to_string(turn_));
     pending_[0] = pending_[1] = true;
     choices_[0] = choices_[1] = Choice{};
+    for (int s = 0; s < 2; ++s) {
+        if (sides_[s].active >= 0) active(s).movedThisTurn = false;
+    }
     phase_ = Phase::Choices;
+}
+
+void Battle::onSwitchInAbility(int side) {
+    const auto& p = active(side);
+    if (p.ability.empty() || p.fainted()) return;
+    const Ability* ab = dex_.ability(p.ability);
+    if (!ab || ab->switchInFoeBoosts.empty()) return;
+    int foe = 1 - side;
+    if (sides_[foe].active < 0 || active(foe).fainted()) return;
+    log_.push_back("|-ability|" + tag(side) + "|" + ab->name);
+    applyBoosts(foe, ab->switchInFoeBoosts);
+}
+
+void Battle::maybeEatBerry(int side) {
+    auto& p = active(side);
+    if (p.fainted() || p.item.empty()) return;
+    const Item* it = dex_.item(p.item);
+    if (!it || it->healBelowHalf <= 0) return;
+    if (p.hp * 2 >= p.stats.hp) return;
+    p.hp = std::min(p.stats.hp, p.hp + it->healBelowHalf);
+    log_.push_back("|-enditem|" + tag(side) + "|" + it->name + "|[eat]");
+    log_.push_back("|-heal|" + tag(side) + "|" + hpOf(p) + "|[from] item: " + it->name);
+    if (it->consumable) p.item.clear();
 }
 
 Request Battle::request(int side) const {
@@ -149,8 +185,8 @@ Request Battle::request(int side) const {
     } else if (phase_ == Phase::FaintSwitch && needsSwitch_[side]) {
         req.kind = Request::Kind::Switch;
         const auto& s = sides_[side];
-        for (int i = 0; i < static_cast<int>(s.pokemon.size()); ++i) {
-            if (i != s.active && !s.pokemon[i].fainted()) req.switches.push_back(i);
+        for (int i = 0; i < static_cast<int>(s.monsters.size()); ++i) {
+            if (i != s.active && !s.monsters[i].fainted()) req.switches.push_back(i);
         }
     }
     return req;
@@ -176,9 +212,10 @@ bool Battle::choose(int side, Choice choice) {
     if (phase_ == Phase::FaintSwitch) {
         if (choice.kind != ChoiceKind::Switch || !needsSwitch_[side]) return false;
         auto& s = sides_[side];
-        if (choice.index < 0 || choice.index >= static_cast<int>(s.pokemon.size())) return false;
-        if (choice.index == s.active || s.pokemon[choice.index].fainted()) return false;
+        if (choice.index < 0 || choice.index >= static_cast<int>(s.monsters.size())) return false;
+        if (choice.index == s.active || s.monsters[choice.index].fainted()) return false;
         switchIn(side, choice.index);
+        onSwitchInAbility(side);
         needsSwitch_[side] = false;
         if (!needsSwitch_[0] && !needsSwitch_[1]) beginTurn();
         return true;
@@ -190,7 +227,7 @@ bool Battle::allChoicesIn() const {
     return phase_ == Phase::Choices && !pending_[0] && !pending_[1];
 }
 
-int Battle::effSpe(const BattlePokemon& p) const {
+int Battle::effSpe(const BattleMonster& p) const {
     int s = calc::applyStage(p.stats.spe, p.boosts.spe);
     if (p.status == "par") s /= 2;
     return s;
@@ -235,6 +272,11 @@ void Battle::commitTurn() {
 
 bool Battle::beforeMove(int side) {
     auto& u = active(side);
+    if (u.flinched) {
+        u.flinched = false;
+        log_.push_back("|cant|" + tag(side) + "|flinch");
+        return false;
+    }
     if (u.status == "slp") {
         if (--u.sleepTurns <= 0) {
             u.status.clear();
@@ -257,7 +299,44 @@ bool Battle::beforeMove(int side) {
         log_.push_back("|cant|" + tag(side) + "|par");
         return false;
     }
+    if (u.confusionTurns > 0) {
+        if (--u.confusionTurns <= 0) {
+            log_.push_back("|-end|" + tag(side) + "|confusion");
+        } else {
+            log_.push_back("|-activate|" + tag(side) + "|confusion");
+            if (rng_.chance(33, 100)) {
+                // Typeless 40 BP self-hit off own attack/defense; no crit,
+                // no STAB, no type multipliers.
+                int atk = calc::applyStage(u.stats.atk, u.boosts.atk);
+                int def = calc::applyStage(u.stats.def, u.boosts.def);
+                int dmg = ((2 * u.level / 5 + 2) * 40 * atk / def) / 50 + 2;
+                dmg = std::max(1, dmg * rng_.damageRoll() / 100);
+                u.hp = std::max(0, u.hp - dmg);
+                log_.push_back("|-damage|" + tag(side) + "|" + hpOf(u) +
+                               "|[from] confusion");
+                checkFaint(side);
+                return false;
+            }
+        }
+    }
     return true;
+}
+
+void Battle::applyVolatile(int targetSide, const std::string& vol) {
+    auto& t = active(targetSide);
+    if (t.fainted()) return;
+    if (vol == "confusion") {
+        if (t.confusionTurns > 0) {
+            log_.push_back("|-fail|" + tag(targetSide));
+            return;
+        }
+        t.confusionTurns = 2 + static_cast<int>(rng_.next(4));   // 2-5 attempts
+        log_.push_back("|-start|" + tag(targetSide) + "|confusion");
+    } else if (vol == "flinch") {
+        // Only meaningful if the target hasn't acted yet this turn;
+        // never persists past the turn (cleared in endOfTurn).
+        if (!t.movedThisTurn) t.flinched = true;
+    }
 }
 
 void Battle::applyStatus(int targetSide, const std::string& status) {
@@ -315,6 +394,7 @@ void Battle::executeMove(int atkSide, int moveIndex) {
     auto& target = active(defSide);
     if (target.fainted()) return;
 
+    user.movedThisTurn = true;
     if (!beforeMove(atkSide)) return;
 
     const Move* move = nullptr;
@@ -339,7 +419,16 @@ void Battle::executeMove(int atkSide, int moveIndex) {
         int tgt = move->targetSelf ? atkSide : defSide;
         if (!move->boosts.empty()) applyBoosts(tgt, move->boosts);
         if (!move->status.empty()) applyStatus(tgt, move->status);
+        if (!move->volatileStatus.empty()) applyVolatile(tgt, move->volatileStatus);
         return;
+    }
+
+    if (!target.ability.empty()) {           // Levitate-style type immunity
+        const Ability* ab = dex_.ability(target.ability);
+        if (ab && !ab->immuneType.empty() && ab->immuneType == move->type) {
+            log_.push_back("|-immune|" + tag(defSide) + "|[from] ability: " + ab->name);
+            return;
+        }
     }
 
     double typeMult = dex_.effectiveness(move->type, target.species->types);
@@ -362,6 +451,13 @@ void Battle::executeMove(int atkSide, int moveIndex) {
     bool stab = std::find(user.species->types.begin(), user.species->types.end(),
                           move->type) != user.species->types.end();
     if (stab) dmg = dmg * 3 / 2;
+    if (!user.ability.empty()) {             // Blaze-style pinch boost
+        const Ability* ab = dex_.ability(user.ability);
+        if (ab && !ab->pinchBoostType.empty() && ab->pinchBoostType == move->type &&
+            user.hp * 3 <= user.stats.hp) {
+            dmg = dmg * 3 / 2;
+        }
+    }
     dmg = static_cast<int>(dmg * typeMult);
     if (physical && user.status == "brn") dmg /= 2;   // burn: 0.5x physical
     if (dmg < 1) dmg = 1;
@@ -381,9 +477,24 @@ void Battle::executeMove(int atkSide, int moveIndex) {
     checkFaint(defSide);
     if (phase_ == Phase::Ended) return;
 
-    if (!target.fainted() && !move->secondaryStatus.empty() &&
-        rng_.chance(static_cast<uint32_t>(move->secondaryChance), 100)) {
-        applyStatus(defSide, move->secondaryStatus);
+    if (!target.fainted()) {
+        if (!move->secondaryStatus.empty() &&
+            rng_.chance(static_cast<uint32_t>(move->secondaryChance), 100)) {
+            applyStatus(defSide, move->secondaryStatus);
+        }
+        if (!move->secondaryVolatile.empty() &&
+            rng_.chance(static_cast<uint32_t>(move->secondaryChance), 100)) {
+            applyVolatile(defSide, move->secondaryVolatile);
+        }
+        if (move->contact && !target.ability.empty()) {   // Static-style
+            const Ability* ab = dex_.ability(target.ability);
+            if (ab && !ab->contactStatus.empty() &&
+                rng_.chance(static_cast<uint32_t>(ab->contactStatusChance), 100)) {
+                log_.push_back("|-ability|" + tag(defSide) + "|" + ab->name);
+                applyStatus(atkSide, ab->contactStatus);
+            }
+        }
+        maybeEatBerry(defSide);
     }
 
     if (moveIndex < 0) {                       // Struggle recoil: 1/4 max HP
@@ -391,6 +502,7 @@ void Battle::executeMove(int atkSide, int moveIndex) {
         user.hp = std::max(0, user.hp - recoil);
         log_.push_back("|-damage|" + tag(atkSide) + "|" + hpOf(user) + "|[from] recoil");
         checkFaint(atkSide);
+        if (phase_ != Phase::Ended && !user.fainted()) maybeEatBerry(atkSide);
     }
 }
 
@@ -417,11 +529,24 @@ void Battle::endOfTurn() {
             dmg = p.stats.hp * p.toxicN / 16;
             from = "tox";
         }
-        if (from.empty()) continue;
+        if (!from.empty()) {
+            p.hp = std::max(0, p.hp - std::max(1, dmg));
+            log_.push_back("|-damage|" + tag(side) + "|" + hpOf(p) + "|[from] " + from);
+            checkFaint(side);
+        }
+        if (phase_ == Phase::Ended || p.fainted()) continue;
 
-        p.hp = std::max(0, p.hp - std::max(1, dmg));
-        log_.push_back("|-damage|" + tag(side) + "|" + hpOf(p) + "|[from] " + from);
-        checkFaint(side);
+        if (!p.item.empty()) {               // Leftovers-style turn heal
+            const Item* it = dex_.item(p.item);
+            if (it && it->healEachTurnDen > 0 && p.hp < p.stats.hp) {
+                p.hp = std::min(p.stats.hp,
+                                p.hp + std::max(1, p.stats.hp / it->healEachTurnDen));
+                log_.push_back("|-heal|" + tag(side) + "|" + hpOf(p) +
+                               "|[from] item: " + it->name);
+            }
+        }
+        maybeEatBerry(side);
+        p.flinched = false;                  // flinch never survives the turn
     }
 }
 
@@ -449,7 +574,7 @@ std::string Battle::serialize() const {
         nlohmann::json js;
         js["name"] = sides_[s].name;
         js["active"] = sides_[s].active;
-        for (const auto& p : sides_[s].pokemon) {
+        for (const auto& p : sides_[s].monsters) {
             nlohmann::json jp;
             jp["species"] = p.species->id;
             jp["name"] = p.name;
@@ -457,10 +582,13 @@ std::string Battle::serialize() const {
             jp["hp"] = p.hp;
             jp["maxhp"] = p.stats.hp;
             jp["status"] = p.status;
+            jp["ability"] = p.ability;
+            jp["item"] = p.item;
+            jp["confusion"] = p.confusionTurns;
             for (const auto& m : p.moves) {
                 jp["moves"].push_back({{"id", m.id}, {"pp", m.pp}});
             }
-            js["pokemon"].push_back(std::move(jp));
+            js["monsters"].push_back(std::move(jp));
         }
         j["sides"].push_back(std::move(js));
     }

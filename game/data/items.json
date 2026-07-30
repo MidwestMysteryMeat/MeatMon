@@ -1,0 +1,16 @@
+{
+  "leftovers": {
+    "name": "Leftovers",
+    "healEachTurnDen": 16
+  },
+  "snackberry": {
+    "name": "Snack Berry",
+    "healBelowHalf": 10,
+    "consumable": true
+  },
+  "feastberry": {
+    "name": "Feast Berry",
+    "healBelowHalf": 30,
+    "consumable": true
+  }
+}

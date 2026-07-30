@@ -9,11 +9,13 @@
 namespace mm::battle {
 
 // A team member as authored (team builder / script / network payload).
-struct PokemonSet {
+struct MonsterSet {
     std::string name;                        // nickname; empty = species name
     std::string species;                     // species id
     int level = 50;
     std::string nature = "hardy";
+    std::string ability;                     // ability id, empty = none
+    std::string item;                        // item id, empty = none
     StatTable evs{};
     StatTable ivs{31, 31, 31, 31, 31, 31};
     std::vector<std::string> moves;          // move ids
@@ -26,7 +28,7 @@ struct MoveSlot {
 };
 
 // In-battle state. stats.hp is max HP.
-struct BattlePokemon {
+struct BattleMonster {
     const Species* species = nullptr;
     std::string name;
     int level = 50;
@@ -37,15 +39,20 @@ struct BattlePokemon {
     int sleepTurns = 0;              // remaining slp turns
     int toxicN = 0;                  // tox residual counter (resets on switch)
     StatTable boosts{};              // stat stages -6..+6 (hp unused)
+    std::string ability;             // ability id
+    std::string item;                // item id ("" once consumed)
+    int confusionTurns = 0;          // volatile: remaining confusion attempts
+    bool flinched = false;           // volatile: cleared each turn
+    bool movedThisTurn = false;
 
     bool fainted() const { return hp <= 0; }
 };
 
 struct Side {
     std::string name;
-    std::vector<PokemonSet> team;            // as submitted
-    std::vector<BattlePokemon> pokemon;      // built at start()
-    int active = -1;                         // index into pokemon (singles)
+    std::vector<MonsterSet> team;            // as submitted
+    std::vector<BattleMonster> monsters;     // built at start()
+    int active = -1;                         // index into monsters (singles)
 
     bool hasReplacement() const;
 };
@@ -81,7 +88,7 @@ public:
     Battle(const Dex& dex, Format format, uint64_t seed,
            Prng::Mode rngMode = Prng::Mode::Showdown);
 
-    void setPlayer(int side, std::string name, std::vector<PokemonSet> team);
+    void setPlayer(int side, std::string name, std::vector<MonsterSet> team);
     void start();
 
     Request request(int side) const;
@@ -101,19 +108,22 @@ public:
 private:
     enum class Phase { Setup, Choices, FaintSwitch, Ended };
 
-    BattlePokemon& active(int side);
-    const BattlePokemon& active(int side) const;
+    BattleMonster& active(int side);
+    const BattleMonster& active(int side) const;
     std::string tag(int side) const;         // "p1a: Nickname"
     void switchIn(int side, int index);
     void beginTurn();
     void executeMove(int side, int moveIndex);   // moveIndex -1 = Struggle
     void checkFaint(int defSide);
-    bool beforeMove(int side);               // slp/frz/par gates, logs |cant|
+    bool beforeMove(int side);               // flinch/slp/frz/par/confusion
     void applyStatus(int targetSide, const std::string& status);
+    void applyVolatile(int targetSide, const std::string& vol);
     void applyBoosts(int targetSide,
                      const std::vector<std::pair<std::string, int>>& boosts);
-    void endOfTurn();                        // residual brn/psn/tox damage
-    int effSpe(const BattlePokemon& p) const;
+    void endOfTurn();                        // residuals, item ticks
+    void onSwitchInAbility(int side);        // Intimidate-style triggers
+    void maybeEatBerry(int side);            // consumable heal-below-half items
+    int effSpe(const BattleMonster& p) const;
 
     const Dex& dex_;
     Format format_;

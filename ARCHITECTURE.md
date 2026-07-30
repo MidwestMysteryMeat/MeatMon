@@ -68,8 +68,15 @@ The battle simulator is **inspired by the architecture of Pokémon Showdown**
 from scratch in C++20 from publicly documented game mechanics (damage formula,
 stat formula, type chart, PRNG constants — all long-published research).
 No Showdown TypeScript/JS source is copied, ported line-by-line, or vendored.
-No Nintendo assets or names ship in this repo: bundled species
-(Emberling, Puddlit, Sprigling, Zapkin) are original placeholders.
+
+**Naming rule for shipped content:** generic English words and descriptive
+compounds anyone can use (Tackle, Headbutt, Growl, Leftovers, Intimidate,
+nature adjectives) are fine. Distinctly Pokémon-coined proper nouns are not:
+no species names, no invented item names (Oran/Sitrus → our Snack/Feast
+Berry), no place/character names, and the word "Pokémon" itself never appears
+in game data or the public API (`MonsterSet`, `BattleMonster`). Bundled
+species (Emberling, Puddlit, Sprigling, Zapkin) are original placeholders,
+and no Nintendo assets ship in this repo.
 
 ### 4.2 Data-driven Dex
 
@@ -95,8 +102,8 @@ C++ switch statements per species.
 ```
 Dex          immutable rules/data tables
 Battle       one battle: 2 Sides, RNG, phase machine, protocol log
-Side         a player: team of BattlePokemon, active slot(s)
-BattlePokemon  in-battle state: computed stats, HP, move slots w/ PP
+Side         a player: team of BattleMonsters, active slot(s)
+BattleMonster  in-battle state: computed stats, HP, move slots w/ PP
 Request      "what may this side legally choose right now"
 Choice       one side's decision (move X / switch to Y)
 Prng         seeded 64-bit LCG (Gen-5 constants, Showdown-compatible next())

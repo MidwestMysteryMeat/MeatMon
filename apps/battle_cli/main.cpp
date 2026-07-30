@@ -41,12 +41,16 @@ int main(int argc, char** argv) {
 
         Battle battle(dex, Format{}, seed);
         battle.setPlayer(0, "Red", {
-            {.species = "emberling", .moves = {"ember", "quickattack", "tackle"}},
-            {.species = "sprigling", .moves = {"vinewhip", "sleeppowder", "tackle"}},
+            {.species = "emberling", .ability = "blaze", .item = "leftovers",
+             .moves = {"ember", "quickattack", "tackle"}},
+            {.species = "sprigling", .ability = "overgrow",
+             .moves = {"vinewhip", "sleeppowder", "tackle"}},
         });
         battle.setPlayer(1, "Blue", {
-            {.species = "puddlit", .moves = {"watergun", "tackle"}},
-            {.species = "zapkin", .moves = {"thundershock", "quickattack"}},
+            {.species = "puddlit", .ability = "intimidate", .item = "snackberry",
+             .moves = {"watergun", "headbutt"}},
+            {.species = "zapkin", .ability = "static",
+             .moves = {"thundershock", "quickattack"}},
         });
         battle.start();
 

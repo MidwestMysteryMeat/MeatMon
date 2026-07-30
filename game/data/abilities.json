@@ -1,0 +1,30 @@
+{
+  "intimidate": {
+    "name": "Intimidate",
+    "switchInFoeBoosts": { "atk": -1 }
+  },
+  "levitate": {
+    "name": "Levitate",
+    "immuneType": "ground"
+  },
+  "blaze": {
+    "name": "Blaze",
+    "pinchBoostType": "fire"
+  },
+  "torrent": {
+    "name": "Torrent",
+    "pinchBoostType": "water"
+  },
+  "overgrow": {
+    "name": "Overgrow",
+    "pinchBoostType": "grass"
+  },
+  "static": {
+    "name": "Static",
+    "contactStatus": { "chance": 30, "status": "par" }
+  },
+  "flamebody": {
+    "name": "Flame Body",
+    "contactStatus": { "chance": 30, "status": "brn" }
+  }
+}

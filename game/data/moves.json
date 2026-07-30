@@ -6,7 +6,8 @@
     "power": 40,
     "accuracy": 100,
     "priority": 0,
-    "pp": 35
+    "pp": 35,
+    "contact": true
   },
   "quickattack": {
     "name": "Quick Attack",
@@ -15,7 +16,19 @@
     "power": 40,
     "accuracy": 100,
     "priority": 1,
-    "pp": 30
+    "pp": 30,
+    "contact": true
+  },
+  "headbutt": {
+    "name": "Headbutt",
+    "type": "normal",
+    "category": "physical",
+    "power": 70,
+    "accuracy": 100,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "secondary": { "chance": 30, "volatile": "flinch" }
   },
   "ember": {
     "name": "Ember",
@@ -43,7 +56,8 @@
     "power": 45,
     "accuracy": 100,
     "priority": 0,
-    "pp": 25
+    "pp": 25,
+    "contact": true
   },
   "thundershock": {
     "name": "Thunder Shock",
@@ -54,6 +68,15 @@
     "priority": 0,
     "pp": 30,
     "secondary": { "chance": 10, "status": "par" }
+  },
+  "mudshot": {
+    "name": "Mud Shot",
+    "type": "ground",
+    "category": "special",
+    "power": 55,
+    "accuracy": 95,
+    "priority": 0,
+    "pp": 15
   },
   "growl": {
     "name": "Growl",
@@ -94,6 +117,16 @@
     "priority": 0,
     "pp": 15,
     "status": "slp"
+  },
+  "confuseray": {
+    "name": "Confuse Ray",
+    "type": "ghost",
+    "category": "status",
+    "power": 0,
+    "accuracy": 100,
+    "priority": 0,
+    "pp": 10,
+    "volatile": "confusion"
   },
   "swordsdance": {
     "name": "Swords Dance",

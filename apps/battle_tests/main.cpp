@@ -49,7 +49,7 @@ void playTurns(Battle& b, int turns, int m1, int m2) {
 }
 
 Battle makeBattle(const Dex& dex, uint64_t seed,
-                  std::vector<PokemonSet> p1, std::vector<PokemonSet> p2) {
+                  std::vector<MonsterSet> p1, std::vector<MonsterSet> p2) {
     Battle b(dex, Format{}, seed);
     b.setPlayer(0, "P1", std::move(p1));
     b.setPlayer(1, "P2", std::move(p2));
@@ -173,6 +173,74 @@ int main(int argc, char** argv) {
         playTurns(b, 6, 0, 0);
         CHECK(logContains(b, "|-status|p2a: Puddlit|slp"));
         CHECK(logContains(b, "|-curestatus|p2a: Puddlit|slp"));
+    }
+
+    // --- intimidate drops the foe's attack on switch-in ---------------------------
+    {
+        Battle b = makeBattle(dex, 11,
+            {{.species = "emberling", .moves = {"growl"}}},
+            {{.species = "puddlit", .ability = "intimidate", .moves = {"growl"}}});
+        CHECK(logContains(b, "|-ability|p2a: Puddlit|Intimidate"));
+        CHECK(logContains(b, "|-unboost|p1a: Emberling|atk|1"));
+    }
+
+    // --- levitate grants ground immunity ------------------------------------------
+    {
+        Battle b = makeBattle(dex, 12,
+            {{.species = "puddlit", .moves = {"mudshot"}}},
+            {{.species = "zapkin", .ability = "levitate", .moves = {"growl"}}});
+        playTurns(b, 2, 0, 0);
+        CHECK(logContains(b, "|-immune|p2a: Zapkin|[from] ability: Levitate"));
+        CHECK(!logContains(b, "|-damage|p2a: Zapkin"));
+    }
+
+    // --- static can paralyze on contact (seed-pinned) ------------------------------
+    {
+        Battle b = makeBattle(dex, 13,
+            {{.species = "emberling", .moves = {"tackle"}}},       // contact
+            {{.species = "zapkin", .ability = "static", .moves = {"growl"}}});
+        playTurns(b, 8, 0, 0);
+        CHECK(logContains(b, "|-ability|p2a: Zapkin|Static"));
+        CHECK(logContains(b, "|-status|p1a: Emberling|par"));
+    }
+
+    // --- leftovers heals each turn once damaged ------------------------------------
+    {
+        Battle b = makeBattle(dex, 14,
+            {{.species = "puddlit", .item = "leftovers", .moves = {"growl"}}},
+            {{.species = "emberling", .moves = {"tackle"}}});
+        playTurns(b, 3, 0, 0);
+        CHECK(logContains(b, "[from] item: Leftovers"));
+    }
+
+    // --- snack berry: eaten once when dropping below half --------------------------
+    {
+        Battle b = makeBattle(dex, 15,
+            {{.species = "emberling", .item = "snackberry", .moves = {"growl"}}},
+            {{.species = "puddlit", .moves = {"watergun"}}});
+        playTurns(b, 10, 0, 0);
+        CHECK(logContains(b, "|-enditem|p1a: Emberling|Snack Berry|[eat]"));
+        CHECK(logContains(b, "[from] item: Snack Berry"));
+    }
+
+    // --- confusion: starts, activates, and either ends or self-hits ------------------
+    {
+        Battle b = makeBattle(dex, 16,
+            {{.species = "emberling", .moves = {"growl"}}},
+            {{.species = "puddlit", .moves = {"confuseray"}}});
+        playTurns(b, 7, 0, 0);
+        CHECK(logContains(b, "|-start|p1a: Emberling|confusion"));
+        CHECK(logContains(b, "|-activate|p1a: Emberling|confusion") ||
+              logContains(b, "|-end|p1a: Emberling|confusion"));
+    }
+
+    // --- headbutt flinch stops the slower side (seed-pinned) -------------------------
+    {
+        Battle b = makeBattle(dex, 17,
+            {{.species = "zapkin", .moves = {"headbutt"}}},        // faster
+            {{.species = "puddlit", .moves = {"growl"}}});
+        playTurns(b, 8, 0, 0);
+        CHECK(logContains(b, "|cant|p2a: Puddlit|flinch"));
     }
 
     // --- struggle kicks in when PP runs dry, with recoil, and ends the battle -------

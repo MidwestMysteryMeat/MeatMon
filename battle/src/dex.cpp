@@ -70,9 +70,11 @@ Dex Dex::load(const std::filesystem::path& dataDir) {
         mv.priority = v.value("priority", 0);
         mv.pp = v.value("pp", 5);
         mv.status = v.value("status", "");
+        mv.volatileStatus = v.value("volatile", "");
         if (v.contains("secondary")) {
             mv.secondaryChance = v["secondary"].value("chance", 0);
             mv.secondaryStatus = v["secondary"].value("status", "");
+            mv.secondaryVolatile = v["secondary"].value("volatile", "");
         }
         if (v.contains("boosts")) {
             for (const auto& [stat, delta] : v["boosts"].items()) {
@@ -80,6 +82,7 @@ Dex Dex::load(const std::filesystem::path& dataDir) {
             }
         }
         mv.targetSelf = v.value("target", "foe") == std::string("self");
+        mv.contact = v.value("contact", false);
         dex.moves_.emplace(id, std::move(mv));
     }
 
@@ -90,6 +93,41 @@ Dex Dex::load(const std::filesystem::path& dataDir) {
         n.plus = v.value("plus", "");
         n.minus = v.value("minus", "");
         dex.natures_.emplace(id, std::move(n));
+    }
+
+    // Optional data files: a game without abilities/items is still valid.
+    if (std::filesystem::exists(dataDir / "abilities.json")) {
+        const json abilitiesJson = parseFile(dataDir / "abilities.json");
+        for (const auto& [id, v] : abilitiesJson.items()) {
+            Ability ab;
+            ab.id = id;
+            ab.name = v.value("name", id);
+            if (v.contains("switchInFoeBoosts")) {
+                for (const auto& [stat, delta] : v["switchInFoeBoosts"].items()) {
+                    ab.switchInFoeBoosts.emplace_back(stat, delta.get<int>());
+                }
+            }
+            ab.immuneType = v.value("immuneType", "");
+            ab.pinchBoostType = v.value("pinchBoostType", "");
+            if (v.contains("contactStatus")) {
+                ab.contactStatus = v["contactStatus"].value("status", "");
+                ab.contactStatusChance = v["contactStatus"].value("chance", 0);
+            }
+            dex.abilities_.emplace(id, std::move(ab));
+        }
+    }
+
+    if (std::filesystem::exists(dataDir / "items.json")) {
+        const json itemsJson = parseFile(dataDir / "items.json");
+        for (const auto& [id, v] : itemsJson.items()) {
+            Item it;
+            it.id = id;
+            it.name = v.value("name", id);
+            it.healEachTurnDen = v.value("healEachTurnDen", 0);
+            it.healBelowHalf = v.value("healBelowHalf", 0);
+            it.consumable = v.value("consumable", false);
+            dex.items_.emplace(id, std::move(it));
+        }
     }
 
     const json chartJson = parseFile(dataDir / "typechart.json");
@@ -116,6 +154,16 @@ const Move* Dex::move(const std::string& id) const {
 const Nature* Dex::nature(const std::string& id) const {
     auto it = natures_.find(id);
     return it != natures_.end() ? &it->second : nullptr;
+}
+
+const Ability* Dex::ability(const std::string& id) const {
+    auto it = abilities_.find(id);
+    return it != abilities_.end() ? &it->second : nullptr;
+}
+
+const Item* Dex::item(const std::string& id) const {
+    auto it = items_.find(id);
+    return it != items_.end() ? &it->second : nullptr;
 }
 
 double Dex::effectiveness(const std::string& attackType,
