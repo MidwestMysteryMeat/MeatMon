@@ -1,0 +1,21 @@
+# Build output
+build/
+build-*/
+dist/
+out/
+
+# IDE / tooling
+.vs/
+.vscode/
+.cache/
+.idea/
+CMakeUserPresets.json
+
+# PokeAPI sprite drop-in folder: real sprite rips are copyrighted game assets
+# and must never be committed. Drop them here locally; only the README stays.
+game/assets/pokemon/*
+!game/assets/pokemon/README.md
+
+# Saves and local dev data
+game/saves/
+*.log

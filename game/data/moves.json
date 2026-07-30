@@ -1,0 +1,65 @@
+{
+  "tackle": {
+    "name": "Tackle",
+    "type": "normal",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 100,
+    "priority": 0,
+    "pp": 35
+  },
+  "quickattack": {
+    "name": "Quick Attack",
+    "type": "normal",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 100,
+    "priority": 1,
+    "pp": 30
+  },
+  "ember": {
+    "name": "Ember",
+    "type": "fire",
+    "category": "special",
+    "power": 40,
+    "accuracy": 100,
+    "priority": 0,
+    "pp": 25
+  },
+  "watergun": {
+    "name": "Water Gun",
+    "type": "water",
+    "category": "special",
+    "power": 40,
+    "accuracy": 100,
+    "priority": 0,
+    "pp": 25
+  },
+  "vinewhip": {
+    "name": "Vine Whip",
+    "type": "grass",
+    "category": "physical",
+    "power": 45,
+    "accuracy": 100,
+    "priority": 0,
+    "pp": 25
+  },
+  "thundershock": {
+    "name": "Thunder Shock",
+    "type": "electric",
+    "category": "special",
+    "power": 40,
+    "accuracy": 100,
+    "priority": 0,
+    "pp": 30
+  },
+  "growl": {
+    "name": "Growl",
+    "type": "normal",
+    "category": "status",
+    "power": 0,
+    "accuracy": 100,
+    "priority": 0,
+    "pp": 40
+  }
+}
