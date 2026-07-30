@@ -80,6 +80,13 @@ public:
     const Ability* ability(const std::string& id) const;
     const Item* item(const std::string& id) const;
 
+    // Enumeration for tools (team builder, dex viewer, editors).
+    std::vector<const Species*> allSpecies() const;   // sorted by num
+    std::vector<const Move*> allMoves() const;        // sorted by id
+    std::vector<const Ability*> allAbilities() const;
+    std::vector<const Item*> allItems() const;
+    std::vector<const Nature*> allNatures() const;
+
     // Combined multiplier of attackType against a defender's type list
     // (0, 0.25, 0.5, 1, 2, 4).
     double effectiveness(const std::string& attackType,

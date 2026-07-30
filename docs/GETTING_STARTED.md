@@ -25,6 +25,9 @@ build\apps\game\Debug\meatmon.exe
 - **B** — shortcut: fight the map's trainer immediately
 - In battle: arrows pick a move, Z/Enter confirms, Esc flees. The scene is a
   pure view over the same Showdown-style protocol log the headless CLI prints.
+- **F1** — open the in-engine editor: map/tile painting, entity editor,
+  species editor, team builder, battle tester, sprite pixel editor, and a
+  raw file editor. See [EDITOR.md](EDITOR.md).
 - Esc (overworld) — quit
 
 ## Author an NPC or trainer (no code)

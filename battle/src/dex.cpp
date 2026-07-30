@@ -2,6 +2,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <fstream>
 #include <stdexcept>
 
@@ -164,6 +165,46 @@ const Ability* Dex::ability(const std::string& id) const {
 const Item* Dex::item(const std::string& id) const {
     auto it = items_.find(id);
     return it != items_.end() ? &it->second : nullptr;
+}
+
+std::vector<const Species*> Dex::allSpecies() const {
+    std::vector<const Species*> v;
+    for (const auto& [id, s] : species_) v.push_back(&s);
+    std::sort(v.begin(), v.end(),
+              [](const Species* a, const Species* b) { return a->num < b->num; });
+    return v;
+}
+
+std::vector<const Move*> Dex::allMoves() const {
+    std::vector<const Move*> v;
+    for (const auto& [id, m] : moves_) v.push_back(&m);
+    std::sort(v.begin(), v.end(),
+              [](const Move* a, const Move* b) { return a->id < b->id; });
+    return v;
+}
+
+std::vector<const Ability*> Dex::allAbilities() const {
+    std::vector<const Ability*> v;
+    for (const auto& [id, a] : abilities_) v.push_back(&a);
+    std::sort(v.begin(), v.end(),
+              [](const Ability* a, const Ability* b) { return a->id < b->id; });
+    return v;
+}
+
+std::vector<const Item*> Dex::allItems() const {
+    std::vector<const Item*> v;
+    for (const auto& [id, i] : items_) v.push_back(&i);
+    std::sort(v.begin(), v.end(),
+              [](const Item* a, const Item* b) { return a->id < b->id; });
+    return v;
+}
+
+std::vector<const Nature*> Dex::allNatures() const {
+    std::vector<const Nature*> v;
+    for (const auto& [id, n] : natures_) v.push_back(&n);
+    std::sort(v.begin(), v.end(),
+              [](const Nature* a, const Nature* b) { return a->id < b->id; });
+    return v;
 }
 
 double Dex::effectiveness(const std::string& attackType,

@@ -40,8 +40,10 @@ build\apps\battle_cli\Debug\battle_cli.exe        # headless battle, full protoc
 build\apps\game\Debug\meatmon.exe --selftest      # 4-second smoke test, exit code 0/1
 ```
 
-Demo controls: arrows/WASD to move, **B** runs one battle turn (protocol log
-prints to the console), Esc quits.
+Demo controls: arrows/WASD move, Z talks (trainer dialogue flows into a full
+battle scene), B quick-battles, **F1 opens the in-engine editor** (map
+painting, entities, species, team builder, battle tester, sprite pixel
+editor — see docs/EDITOR.md), Esc quits.
 
 ## Documents
 

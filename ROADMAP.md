@@ -75,12 +75,24 @@ Runs in parallel with 1–2; `battle/` has no engine dependencies.
 - [ ] Battle hooks in Lua for custom moves/abilities/formats
 - [ ] Script console in the debug overlay
 
-## Phase 5 — Tools
+## Phase 5 — Tools (started early: v1 shipped)
 
-- [ ] Dear ImGui debug overlay: entity inspector, battle state viewer, console
-- [ ] Map editor (in-engine): tile painting, layers, collision, warps, entities
-- [ ] Sprite/animation editor: frame list, timing, origin, hitbox
-- [ ] Team builder + Pokédex viewer; battle tester (any matchup, any seed)
+- [x] Dear ImGui integrated (SDL3 + SDL_Renderer backends), F1 editor mode
+      with native-resolution UI over the paused game (docs/EDITOR.md)
+- [x] Map editor v1: tile painting (ground/objects/collision), palette from
+      the tileset image, JSON round-trip save preserving unknown fields
+- [x] Entity editor: add/edit/delete/click-place NPCs + trainers, dialogue,
+      trainer team JSON with validation
+- [x] Species editor (stats/types/num) with live Dex reload; new-species flow
+- [x] Team builder writing player.json (Dex-driven dropdowns)
+- [x] Battle tester: headless run of any seed vs any map trainer, full log
+- [x] Sprite studio v1: pixel editor saving PNGs into the hot-reload pipeline
+- [x] Files panel: raw text editor + JSON validation for game/ data/scripts
+- [ ] Map editor v2: warps, multi-map, resize, undo
+- [ ] Sprite studio v2: animation frames/timing, origin, hitboxes, palettes
+- [ ] Debug overlay during gameplay: entity inspector, battle state viewer,
+      script console (needs Phase 4 Lua)
+- [ ] Dex viewer (read-only browse with sprites)
 
 ## Phase 6 — Networking
 

@@ -39,6 +39,9 @@ bool Tilemap::load(const std::filesystem::path& file, Tilemap& out) {
     readLayer("objects", m.objects);
     readLayer("collision", m.collision);
 
+    m.warps = j.value("warps", json::array());
+    m.events = j.value("events", json::array());
+
     if (j.contains("entities") && j["entities"].is_array()) {
         for (const auto& e : j["entities"]) {
             MapEntity ent;
@@ -54,6 +57,49 @@ bool Tilemap::load(const std::filesystem::path& file, Tilemap& out) {
     }
 
     out = std::move(m);
+    return true;
+}
+
+bool Tilemap::save(const std::filesystem::path& file) const {
+    json j;
+    j["tile_size"] = tileSize;
+    j["width"] = width;
+    j["height"] = height;
+    j["tileset"] = tilesetPath;
+
+    auto layerRows = [&](const std::vector<int>& layer) {
+        json rows = json::array();
+        for (int y = 0; y < height; ++y) {
+            json row = json::array();
+            for (int x = 0; x < width; ++x) {
+                row.push_back(layer[static_cast<size_t>(y) * width + x]);
+            }
+            rows.push_back(std::move(row));
+        }
+        return rows;
+    };
+    j["layers"]["ground"] = layerRows(ground);
+    j["layers"]["objects"] = layerRows(objects);
+    j["layers"]["collision"] = layerRows(collision);
+    j["warps"] = warps;
+    j["events"] = events;
+
+    json ents = json::array();
+    for (const auto& e : entities) {
+        json je = e.extra.is_object() ? e.extra : json::object();
+        je["type"] = e.type;
+        je["id"] = e.id;
+        je["sprite"] = e.sprite;
+        je["facing"] = e.facing;
+        je["x"] = e.x;
+        je["y"] = e.y;
+        ents.push_back(std::move(je));
+    }
+    j["entities"] = std::move(ents);
+
+    std::ofstream f(file);
+    if (!f) return false;
+    f << j.dump(2) << "\n";
     return true;
 }
 

@@ -4,6 +4,7 @@
 // --selftest auto-plays a battle and exits 0/1 for CI.
 
 #include "battle_scene.hpp"
+#include "editor_ui.hpp"
 
 #include <meatmon/app.hpp>
 #include <meatmon/assets.hpp>
@@ -73,18 +74,30 @@ public:
         player_.curX = player_.prevX = player_.tx * ts;
         player_.curY = player_.prevY = player_.ty * ts;
 
-        std::puts("[MeatMon] arrows/WASD move | Z = talk | B = quick battle | Esc = quit");
+        std::puts("[MeatMon] arrows/WASD move | Z = talk | B = quick battle | F1 = editor | Esc = quit");
         std::puts("[MeatMon] in battle: arrows pick a move, Z/Enter confirms, Esc flees");
         return tileset_ != nullptr && playerTex_ != nullptr;
     }
 
     void handleEvent(const SDL_Event& ev) override {
+        if (editorOpen_) {
+            if (editor_) editor_->processEvent(ev);
+            if (ev.type == SDL_EVENT_KEY_DOWN && !ev.key.repeat &&
+                ev.key.key == SDLK_F1) {
+                setEditorOpen(false);
+            }
+            return;
+        }
         if (mode_ == Mode::Battle && battleScene_) {
             battleScene_->handleEvent(ev);
             return;
         }
         if (ev.type != SDL_EVENT_KEY_DOWN || ev.key.repeat) return;
         SDL_Keycode k = ev.key.key;
+        if (k == SDLK_F1 && mode_ == Mode::Overworld) {
+            setEditorOpen(true);
+            return;
+        }
         bool confirm = k == SDLK_Z || k == SDLK_RETURN || k == SDLK_SPACE;
 
         if (mode_ == Mode::Dialogue) {
@@ -104,7 +117,12 @@ public:
     void update(double dt) override {
         ++ticks_;
         assets_->pollHotReload(ticks_ / 60.0);
-        pollMapReload();
+        if (!editorOpen_) pollMapReload();   // editor owns the map while open
+        if (selftest_) {                     // editor smoke test in CI
+            if (ticks_ == 420) setEditorOpen(true);
+            else if (ticks_ == 540) setEditorOpen(false);
+        }
+        if (editorOpen_) return;
 
         if (selftest_ && ticks_ == 30 && mode_ == Mode::Overworld) {
             const MapEntity* t = firstTrainer();
@@ -131,6 +149,10 @@ public:
     }
 
     void render(SDL_Renderer* r, float alpha) override {
+        if (editorOpen_ && editor_) {
+            editor_->render();
+            return;
+        }
         if (mode_ == Mode::Battle && battleScene_) {
             battleScene_->render(r, font_);
             return;
@@ -180,6 +202,39 @@ public:
 
 private:
     enum class Mode { Overworld, Dialogue, ToBattle, Battle };
+
+    void setEditorOpen(bool open) {
+        if (open && !editor_) {
+            EditorUI::Hooks hooks;
+            hooks.dex = [this]() -> const battle::Dex& { return *dex_; };
+            hooks.reloadData = [this] {
+                try {
+                    dex_ = std::make_unique<battle::Dex>(
+                        battle::Dex::load(gameDir_ / "data"));
+                } catch (const std::exception& e) {
+                    SDL_Log("Dex reload failed: %s", e.what());
+                }
+                loadPlayer();
+            };
+            editor_ = std::make_unique<EditorUI>(*app_, *assets_, *spriteLib_,
+                                                 map_, gameDir_, mapPath_, hooks);
+            if (!editor_->init()) {
+                SDL_Log("editor init failed");
+                editor_.reset();
+                return;
+            }
+        }
+        editorOpen_ = open;
+        // The editor draws at native window resolution; gameplay uses the
+        // integer-scaled 320x192 logical canvas.
+        if (open) {
+            SDL_SetRenderLogicalPresentation(app_->renderer(), 0, 0,
+                                             SDL_LOGICAL_PRESENTATION_DISABLED);
+        } else {
+            SDL_SetRenderLogicalPresentation(app_->renderer(), 320, 192,
+                                             SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
+        }
+    }
 
     bool loadPlayer() {
         std::ifstream f(gameDir_ / "data" / "player.json");
@@ -333,6 +388,8 @@ private:
     std::vector<battle::MonsterSet> playerTeam_;
     std::unique_ptr<battle::Dex> dex_;
     std::unique_ptr<BattleScene> battleScene_;
+    std::unique_ptr<EditorUI> editor_;
+    bool editorOpen_ = false;
     Mode mode_ = Mode::Overworld;
     int transitionT_ = 0;
     bool sawBattleMove_ = false;

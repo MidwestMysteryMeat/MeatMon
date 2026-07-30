@@ -28,8 +28,10 @@ struct Tilemap {
     std::string tilesetPath;               // relative to assets root
     std::vector<int> ground, objects, collision;
     std::vector<MapEntity> entities;
+    nlohmann::json warps, events;          // preserved verbatim on save
 
     static bool load(const std::filesystem::path& file, Tilemap& out);
+    bool save(const std::filesystem::path& file) const;   // editor round-trip
 
     bool solid(int tx, int ty) const;      // out of bounds = solid
     void draw(SDL_Renderer* renderer, const Texture& tileset,
