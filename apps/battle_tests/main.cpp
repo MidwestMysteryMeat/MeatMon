@@ -330,6 +330,45 @@ int main(int argc, char** argv) {
         CHECK(logContains(b, "[from] sandstorm"));
     }
 
+    // --- protect blocks the foe's move this turn only, then lapses -------------------
+    {
+        Battle b = makeBattle(dex, 70,
+            {{.species = "emberling", .moves = {"protect", "growl"}}},
+            {{.species = "puddlit", .moves = {"tackle", "tackle"}}});
+        playTurns(b, 1, 0, 0);
+        CHECK(logContains(b, "|-singleturn|p1a: Emberling|Protect"));
+        CHECK(logContains(b, "|-activate|p1a: Emberling|Protect"));
+        CHECK(b.side(0).monsters[0].hp == b.side(0).monsters[0].stats.hp);   // untouched
+        playTurns(b, 1, 1, 1);   // protect not re-chosen: this tackle lands
+        CHECK(b.side(0).monsters[0].hp < b.side(0).monsters[0].stats.hp);
+    }
+
+    // --- recover heals 50% of max HP, fails at full HP -------------------------------
+    {
+        MonsterSet hurt{.species = "puddlit", .moves = {"recover"}};
+        hurt.hp = 10;
+        Battle b(dex, Format{}, 71);
+        b.setPlayer(0, "A", {hurt});
+        b.setPlayer(1, "B", {{.species = "emberling", .moves = {"growl"}}});
+        b.start();
+        int maxHp = b.side(0).monsters[0].stats.hp;
+        playTurns(b, 1, 0, 0);
+        CHECK(logContains(b, "|-heal|p1a: Puddlit"));
+        CHECK(b.side(0).monsters[0].hp > 10);
+        CHECK(b.side(0).monsters[0].hp <= maxHp);
+    }
+
+    // --- double-edge: recoil off damage dealt, distinct from Struggle's flat 1/4 -----
+    {
+        Battle b = makeBattle(dex, 72,
+            {{.species = "emberling", .moves = {"doubleedge"}}},
+            {{.species = "puddlit", .moves = {"growl"}}});
+        playTurns(b, 1, 0, 0);
+        CHECK(logContains(b, "|-damage|p1a: Emberling") &&
+              logContains(b, "[from] recoil"));
+        CHECK(b.side(0).monsters[0].hp < b.side(0).monsters[0].stats.hp);
+    }
+
     // --- struggle kicks in when PP runs dry, with recoil, and ends the battle -------
     {
         Battle b = makeBattle(dex, 314,

@@ -74,8 +74,11 @@ Runs in parallel with 1–2; `battle/` has no engine dependencies.
       (1/16 max HP end-of-turn chip, rock/ground/steel and ice immune),
       5-turn duration set by field moves
 - [ ] Terrain (electric/grassy/misty/psychic)
-- [ ] Full move effect coverage (multi-hit, charge, protect, switch moves,
-      hazards, healing, recoil-by-fraction)
+- [x] Protect (priority move, blocks the foe's hit, lapses unless re-chosen
+      each turn), healing moves (% of max HP), recoil-by-fraction (% of
+      damage dealt, distinct from Struggle's flat 1/4 max HP)
+- [ ] Remaining move effect coverage (multi-hit, charge, switch moves,
+      hazards)
 - [ ] Doubles/Triples: multi-slot sides, targeting rules
 - [ ] Generation mechanics switch (1–9): per-gen formula/typechart tables;
       cartridge vs Showdown RNG call-order parity

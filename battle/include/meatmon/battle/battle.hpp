@@ -48,6 +48,7 @@ struct BattleMonster {
     int confusionTurns = 0;          // volatile: remaining confusion attempts
     bool flinched = false;           // volatile: cleared each turn
     int substituteHp = 0;            // volatile: 0 = none, absorbs hits/status
+    bool protecting = false;         // this turn only; re-chosen each turn
     bool movedThisTurn = false;
 
     bool fainted() const { return hp <= 0; }

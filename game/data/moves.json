@@ -193,5 +193,38 @@
     "pp": 10,
     "target": "self",
     "weather": "hail"
+  },
+  "protect": {
+    "name": "Protect",
+    "type": "normal",
+    "category": "status",
+    "power": 0,
+    "accuracy": -1,
+    "priority": 4,
+    "pp": 10,
+    "target": "self",
+    "protect": true
+  },
+  "recover": {
+    "name": "Recover",
+    "type": "normal",
+    "category": "status",
+    "power": 0,
+    "accuracy": -1,
+    "priority": 0,
+    "pp": 10,
+    "target": "self",
+    "healPercent": 50
+  },
+  "doubleedge": {
+    "name": "Double-Edge",
+    "type": "normal",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 100,
+    "priority": 0,
+    "pp": 15,
+    "contact": true,
+    "recoilPercent": 33
   }
 }

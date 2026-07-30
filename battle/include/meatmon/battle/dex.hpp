@@ -40,6 +40,9 @@ struct Move {
     bool targetSelf = false;         // boosts/status apply to the user
     bool contact = false;            // makes contact (Static-style triggers)
     std::string weather;             // field move: "rain"/"sun"/"sandstorm"/"hail"
+    int healPercent = 0;              // status move: heal this % of max HP
+    int recoilPercent = 0;            // damaging move: this % of damage dealt
+    bool isProtect = false;           // status move: block the foe's hit this turn
 };
 
 // Abilities/items are declarative data fields interpreted by the sim.

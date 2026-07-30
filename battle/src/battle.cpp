@@ -146,6 +146,7 @@ void Battle::switchIn(int side, int index) {
     p.confusionTurns = 0;   // volatiles clear on switch
     p.flinched = false;
     p.substituteHp = 0;
+    p.protecting = false;
     std::ostringstream os;
     os << "|switch|" << tag(side) << "|" << p.species->name << ", L" << p.level
        << "|" << hpOf(p);
@@ -158,7 +159,10 @@ void Battle::beginTurn() {
     pending_[0] = pending_[1] = true;
     choices_[0] = choices_[1] = Choice{};
     for (int s = 0; s < 2; ++s) {
-        if (sides_[s].active >= 0) active(s).movedThisTurn = false;
+        if (sides_[s].active >= 0) {
+            active(s).movedThisTurn = false;
+            active(s).protecting = false;   // must be re-chosen to stay up
+        }
     }
     phase_ = Phase::Choices;
 }
@@ -441,6 +445,11 @@ void Battle::executeMove(int atkSide, int moveIndex) {
 
     log_.push_back("|move|" + tag(atkSide) + "|" + move->name + "|" + tag(defSide));
 
+    if (!move->targetSelf && target.protecting) {
+        log_.push_back("|-activate|" + tag(defSide) + "|Protect");
+        return;
+    }
+
     if (move->accuracy > 0 &&
         !rng_.chance(static_cast<uint32_t>(move->accuracy), 100)) {
         log_.push_back("|-miss|" + tag(atkSide) + "|" + tag(defSide));
@@ -453,10 +462,25 @@ void Battle::executeMove(int atkSide, int moveIndex) {
             log_.push_back("|-fail|" + tag(atkSide));
             return;
         }
+        if (move->isProtect) {
+            user.protecting = true;
+            log_.push_back("|-singleturn|" + tag(atkSide) + "|Protect");
+            return;
+        }
         if (!move->boosts.empty()) applyBoosts(tgt, move->boosts);
         if (!move->status.empty()) applyStatus(tgt, move->status);
         if (!move->volatileStatus.empty()) applyVolatile(tgt, move->volatileStatus);
         if (!move->weather.empty()) setWeather(move->weather);
+        if (move->healPercent > 0) {
+            auto& t = active(tgt);
+            if (t.hp >= t.stats.hp) {
+                log_.push_back("|-fail|" + tag(tgt) + "|heal");
+            } else {
+                int amt = std::max(1, t.stats.hp * move->healPercent / 100);
+                t.hp = std::min(t.stats.hp, t.hp + amt);
+                log_.push_back("|-heal|" + tag(tgt) + "|" + hpOf(t));
+            }
+        }
         return;
     }
 
@@ -558,6 +582,12 @@ void Battle::executeMove(int atkSide, int moveIndex) {
 
     if (moveIndex < 0) {                       // Struggle recoil: 1/4 max HP
         int recoil = std::max(1, user.stats.hp / 4);
+        user.hp = std::max(0, user.hp - recoil);
+        log_.push_back("|-damage|" + tag(atkSide) + "|" + hpOf(user) + "|[from] recoil");
+        checkFaint(atkSide);
+        if (phase_ != Phase::Ended && !user.fainted()) maybeEatBerry(atkSide);
+    } else if (move->recoilPercent > 0) {      // recoil off damage dealt
+        int recoil = std::max(1, dmg * move->recoilPercent / 100);
         user.hp = std::max(0, user.hp - recoil);
         log_.push_back("|-damage|" + tag(atkSide) + "|" + hpOf(user) + "|[from] recoil");
         checkFaint(atkSide);
