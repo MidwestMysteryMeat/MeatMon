@@ -9,6 +9,12 @@ one roof. **What it is not:** no physics engine, no 3D, no lighting, no
 particle systems. Every line exists to ship a monster-catching RPG with
 accurate, server-authoritative battles.
 
+<p align="center">
+  <img src="docs/screenshots/overworld.png" width="32%" alt="Overworld: grid movement, NPCs, warps between maps">
+  <img src="docs/screenshots/battle.png" width="32%" alt="In-window battle scene driven by the protocol log">
+  <img src="docs/screenshots/editor.png" width="32%" alt="F1 in-engine editor: map painting, entities, live save">
+</p>
+
 ## Layout
 
 ```
@@ -38,6 +44,7 @@ Run from the repo root (the exe looks for the `game/` folder):
 build\apps\game\Debug\meatmon.exe                 # windowed demo
 build\apps\battle_cli\Debug\battle_cli.exe        # headless battle, full protocol log
 build\apps\game\Debug\meatmon.exe --selftest      # 4-second smoke test, exit code 0/1
+build\apps\game\Debug\meatmon.exe --shot "30:out.png"   # headless screenshot at tick 30 (repeatable, auto-exits)
 ```
 
 Demo controls: arrows/WASD move, Z talks (trainer dialogue flows into a full

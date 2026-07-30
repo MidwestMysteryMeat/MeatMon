@@ -16,12 +16,14 @@
 #include <meatmon/battle/team.hpp>
 
 #include <SDL3/SDL_main.h>
+#include <stb_image_write.h>       // implementation lives in editor_ui.cpp
 
 #include <algorithm>
 #include <cstdio>
 #include <deque>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -41,8 +43,10 @@ struct Player {
 
 class DemoGame : public IGame {
 public:
-    DemoGame(std::filesystem::path gameDir, bool selftest)
-        : gameDir_(std::move(gameDir)), selftest_(selftest) {}
+    DemoGame(std::filesystem::path gameDir, bool selftest,
+             std::map<uint64_t, std::string> shots = {})
+        : gameDir_(std::move(gameDir)), selftest_(selftest),
+          shotSchedule_(std::move(shots)) {}
 
     bool sawBattleMove() const { return sawBattleMove_; }
 
@@ -164,53 +168,51 @@ public:
     void render(SDL_Renderer* r, float alpha) override {
         if (editorOpen_ && editor_) {
             editor_->render();
-            return;
-        }
-        if (mode_ == Mode::Battle && battleScene_) {
+        } else if (mode_ == Mode::Battle && battleScene_) {
             battleScene_->render(r, font_);
-            return;
-        }
+        } else {
+            SDL_SetRenderDrawColor(r, 16, 20, 32, 255);
+            SDL_RenderClear(r);
+            if (tileset_) map_.draw(r, *tileset_, 0.f, 0.f);
 
-        SDL_SetRenderDrawColor(r, 16, 20, 32, 255);
-        SDL_RenderClear(r);
-        if (tileset_) map_.draw(r, *tileset_, 0.f, 0.f);
-
-        for (const auto& e : map_.entities) {   // NPCs under the player layer
-            Texture* tex = assets_->texture(
-                spriteLib_->resolve({.slug = e.sprite}).string());
-            if (!tex) continue;
-            SDL_FRect dst{static_cast<float>(e.x * map_.tileSize),
-                          static_cast<float>(e.y * map_.tileSize), 16.f, 16.f};
-            SDL_RenderTexture(r, tex->handle, nullptr, &dst);
-        }
-
-        if (playerTex_) {
-            float x = player_.prevX + (player_.curX - player_.prevX) * alpha;
-            float y = player_.prevY + (player_.curY - player_.prevY) * alpha;
-            SDL_FRect dst{x, y, 16.f, 16.f};
-            SDL_RenderTexture(r, playerTex_->handle, nullptr, &dst);
-        }
-
-        if (mode_ == Mode::Dialogue) {
-            SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(r, 16, 18, 28, 245);
-            SDL_FRect panel{4, 144, 312, 44};
-            SDL_RenderFillRect(r, &panel);
-            SDL_SetRenderDrawColor(r, 120, 132, 168, 255);
-            SDL_RenderRect(r, &panel);
-            if (!dlgSpeaker_.empty()) {
-                font_.draw(r, dlgSpeaker_, 10, 146, {255, 224, 96, 255});
+            for (const auto& e : map_.entities) {   // NPCs under the player layer
+                Texture* tex = assets_->texture(
+                    spriteLib_->resolve({.slug = e.sprite}).string());
+                if (!tex) continue;
+                SDL_FRect dst{static_cast<float>(e.x * map_.tileSize),
+                              static_cast<float>(e.y * map_.tileSize), 16.f, 16.f};
+                SDL_RenderTexture(r, tex->handle, nullptr, &dst);
             }
-            if (!dlg_.empty()) font_.draw(r, wrapText(dlg_.front(), 37), 10, 159);
-        }
 
-        if (mode_ == Mode::ToBattle) {          // strobe flash into the battle
-            SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-            Uint8 a = (transitionT_ / 4) % 2 ? 235 : 60;
-            SDL_SetRenderDrawColor(r, 250, 250, 255, a);
-            SDL_FRect full{0, 0, 320, 192};
-            SDL_RenderFillRect(r, &full);
+            if (playerTex_) {
+                float x = player_.prevX + (player_.curX - player_.prevX) * alpha;
+                float y = player_.prevY + (player_.curY - player_.prevY) * alpha;
+                SDL_FRect dst{x, y, 16.f, 16.f};
+                SDL_RenderTexture(r, playerTex_->handle, nullptr, &dst);
+            }
+
+            if (mode_ == Mode::Dialogue) {
+                SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(r, 16, 18, 28, 245);
+                SDL_FRect panel{4, 144, 312, 44};
+                SDL_RenderFillRect(r, &panel);
+                SDL_SetRenderDrawColor(r, 120, 132, 168, 255);
+                SDL_RenderRect(r, &panel);
+                if (!dlgSpeaker_.empty()) {
+                    font_.draw(r, dlgSpeaker_, 10, 146, {255, 224, 96, 255});
+                }
+                if (!dlg_.empty()) font_.draw(r, wrapText(dlg_.front(), 37), 10, 159);
+            }
+
+            if (mode_ == Mode::ToBattle) {       // strobe flash into the battle
+                SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+                Uint8 a = (transitionT_ / 4) % 2 ? 235 : 60;
+                SDL_SetRenderDrawColor(r, 250, 250, 255, a);
+                SDL_FRect full{0, 0, 320, 192};
+                SDL_RenderFillRect(r, &full);
+            }
         }
+        maybeCaptureShot();
     }
 
 private:
@@ -591,6 +593,37 @@ private:
         transitionT_ = 0;
     }
 
+    // Screenshot capture (--shot TICK:PATH, repeatable): fires from render()
+    // so the frame drawn for `ticks_` has actually been issued to the
+    // renderer before we read it back.
+    void maybeCaptureShot() {
+        if (shotSchedule_.empty()) return;
+        auto it = shotSchedule_.find(ticks_);
+        if (it == shotSchedule_.end()) return;
+        captureShot(it->second);
+        shotSchedule_.erase(it);
+    }
+
+    void captureShot(const std::string& path) {
+        SDL_Surface* surf = SDL_RenderReadPixels(app_->renderer(), nullptr);
+        if (!surf) {
+            SDL_Log("screenshot failed: %s", SDL_GetError());
+            return;
+        }
+        SDL_Surface* conv = SDL_ConvertSurface(surf, SDL_PIXELFORMAT_RGBA32);
+        SDL_DestroySurface(surf);
+        if (!conv) {
+            SDL_Log("screenshot convert failed: %s", SDL_GetError());
+            return;
+        }
+        std::filesystem::path p(path);
+        std::error_code ec;
+        if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path(), ec);
+        stbi_write_png(path.c_str(), conv->w, conv->h, 4, conv->pixels, conv->pitch);
+        SDL_DestroySurface(conv);
+        SDL_Log("[MeatMon] screenshot saved: %s", path.c_str());
+    }
+
     void pollMapReload() {
         if (ticks_ % 30 != 0) return;
         std::error_code ec;
@@ -642,6 +675,7 @@ private:
     battle::Prng encounterRng_{0x6E1C0053ULL};
 
     uint64_t ticks_ = 0;
+    std::map<uint64_t, std::string> shotSchedule_;   // tick -> output path
 };
 
 } // namespace
@@ -649,10 +683,21 @@ private:
 int main(int argc, char** argv) {
     std::filesystem::path gameDir = "game";
     bool selftest = false;
+    std::map<uint64_t, std::string> shots;    // --shot TICK:PATH, repeatable
+    uint64_t maxShotTick = 0;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--game" && i + 1 < argc) gameDir = argv[++i];
         else if (a == "--selftest") selftest = true;
+        else if (a == "--shot" && i + 1 < argc) {
+            std::string spec = argv[++i];
+            auto colon = spec.find(':');
+            if (colon != std::string::npos) {
+                uint64_t tick = std::stoull(spec.substr(0, colon));
+                shots[tick] = spec.substr(colon + 1);
+                maxShotTick = std::max(maxShotTick, tick);
+            }
+        }
     }
 
     AppConfig cfg;
@@ -664,8 +709,9 @@ int main(int argc, char** argv) {
     App app;
     if (!app.init(cfg)) return 1;
 
-    DemoGame game(gameDir, selftest);
-    int rc = app.run(game, selftest ? 600 : -1);
+    DemoGame game(gameDir, selftest, shots);
+    int maxFrames = selftest ? 600 : (!shots.empty() ? static_cast<int>(maxShotTick) + 30 : -1);
+    int rc = app.run(game, maxFrames);
 
     if (selftest) {
         bool ok = rc == 0 && game.sawBattleMove();
