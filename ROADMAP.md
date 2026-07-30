@@ -21,7 +21,9 @@ competitive battles?* If no, it doesn't get a phase.
 - [ ] Grid movement polish: facing, run/walk speeds, 4-dir character sheets
 - [ ] Camera (follow, map-edge clamp), multi-map loading, warps between maps
 - [ ] Entity set: NPC, Trainer, Item, Building, Warp, Trigger from map JSON
-- [ ] Text/dialogue box rendering (bitmap font), input routing (UI vs world)
+- [x] Bitmap font rendering (`mm::Font`, generated ASCII atlas)
+- [ ] Dialogue box + input routing for overworld UI (font exists; box is
+      battle-only so far)
 - [ ] Audio via miniaudio or SDL: BGM + SFX, data-driven per map/event
 - [ ] Save/load v1 (versioned JSON): position, flags, party
 
@@ -30,8 +32,10 @@ competitive battles?* If no, it doesn't get a phase.
 - [ ] Dialogue system with choices + conditionals (flag/var checks)
 - [ ] Encounters: grass/cave tables per map (species, levels, rates)
 - [ ] Inventory/bag, party management UI, PC storage boxes, Pokédex flags
-- [ ] Battle transition + battle scene (view over the protocol log): HP bars,
-      move menu driven by `Request`, sprite slots using `SpriteLibrary`
+- [x] Battle transition + battle scene v1 (pure view over the protocol log):
+      animated HP bars, move menu driven by `Request`, faint-switch menu,
+      humanized message box, sprite slots via `SpriteLibrary`, flee (Esc)
+- [ ] Battle scene v2: attack/faint animations, exp bar, catch flow
 - [ ] Trainer battles from entity data (line-of-sight, reward money)
 
 ## Phase 3 — Battle engine to competitive depth (highest priority track)

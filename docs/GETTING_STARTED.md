@@ -19,10 +19,11 @@ build\apps\game\Debug\meatmon.exe
 ```
 
 - Arrows / WASD — walk (grid-stepped, collision from the map's layer)
-- **B** — run one battle turn; the Showdown-style protocol log prints to the
-  console (`|move|`, `|-damage|`, `|faint|`, `|win|`…). When a battle ends,
-  B starts a fresh one.
-- Esc — quit
+- **B** — start a battle: full in-window battle scene with HP bars, a move
+  menu (arrows + Z/Enter), faint-switch menu, and battle messages. Esc flees.
+  The scene is a pure view over the same Showdown-style protocol log the
+  headless CLI prints.
+- Esc (overworld) — quit
 
 Headless battle (no window, full battle to completion + JSON snapshot):
 

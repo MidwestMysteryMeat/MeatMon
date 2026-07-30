@@ -100,6 +100,7 @@ public:
     int winner() const { return winner_; }   // -1 until ended
     int turn() const { return turn_; }
     const std::vector<std::string>& log() const { return log_; }
+    const Side& side(int i) const { return sides_[i]; }   // read-only view
 
     // JSON snapshot (turn, sides, HP/PP, RNG state, log) for network sync
     // and replays. Full restore round-trip is Phase 3 (see ROADMAP).

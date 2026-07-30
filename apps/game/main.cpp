@@ -1,9 +1,13 @@
-// MeatMon demo app: tilemap + grid-stepped player with interpolated render,
-// PokeAPI-layout sprite resolution, hot-reload, and a battle-engine exchange
-// on demand (B). --selftest runs 4 seconds headless-ish and exits 0/1.
+// MeatMon demo app: grid-stepped overworld with interpolated rendering and
+// hot-reload, plus a full in-window battle scene (B key) driven by the battle
+// engine's request/choice protocol. --selftest auto-plays a battle and exits
+// 0/1 for CI.
+
+#include "battle_scene.hpp"
 
 #include <meatmon/app.hpp>
 #include <meatmon/assets.hpp>
+#include <meatmon/font.hpp>
 #include <meatmon/sprites.hpp>
 #include <meatmon/tilemap.hpp>
 #include <meatmon/battle/battle.hpp>
@@ -50,9 +54,7 @@ public:
 
         tileset_ = assets_->texture(map_.tilesetPath);
         playerTex_ = assets_->texture(spriteLib_->resolve({.slug = "player"}).string());
-        monFront_ = assets_->texture(spriteLib_->resolve({.slug = "puddlit"}).string());
-        monBack_ = assets_->texture(
-            spriteLib_->resolve({.slug = "emberling", .back = true}).string());
+        font_.tex = assets_->texture("fonts/mono.png");
 
         try {
             dex_ = std::make_unique<battle::Dex>(battle::Dex::load(gameDir_ / "data"));
@@ -65,24 +67,89 @@ public:
         player_.curX = player_.prevX = player_.tx * ts;
         player_.curY = player_.prevY = player_.ty * ts;
 
-        std::puts("[MeatMon] arrows/WASD move | B = battle turn | Esc = quit");
-        std::puts("[MeatMon] edit game/assets/*.png or game/maps/demo.json while running to hot-reload");
+        std::puts("[MeatMon] arrows/WASD move | B = battle | Esc = quit");
+        std::puts("[MeatMon] in battle: arrows pick a move, Z/Enter confirms, Esc flees");
         return tileset_ != nullptr && playerTex_ != nullptr;
     }
 
     void handleEvent(const SDL_Event& ev) override {
+        if (mode_ == Mode::Battle && battleScene_) {
+            battleScene_->handleEvent(ev);
+            return;
+        }
         if (ev.type == SDL_EVENT_KEY_DOWN && !ev.key.repeat) {
             if (ev.key.key == SDLK_ESCAPE) app_->quit();
-            if (ev.key.key == SDLK_B) battleTurn();
+            if (ev.key.key == SDLK_B && mode_ == Mode::Overworld) {
+                mode_ = Mode::ToBattle;
+                transitionT_ = 0;
+            }
         }
     }
 
     void update(double dt) override {
         ++ticks_;
-        double now = ticks_ / 60.0;
-        assets_->pollHotReload(now);
+        assets_->pollHotReload(ticks_ / 60.0);
         pollMapReload();
 
+        if (selftest_ && ticks_ == 30 && mode_ == Mode::Overworld) {
+            mode_ = Mode::ToBattle;
+            transitionT_ = 0;
+        }
+
+        switch (mode_) {
+        case Mode::Overworld:
+            updateOverworld(dt);
+            break;
+        case Mode::ToBattle:
+            if (++transitionT_ >= 24) {
+                battleScene_ = std::make_unique<BattleScene>(*assets_, *spriteLib_,
+                                                             *dex_, selftest_);
+                battleScene_->start(0x5EED0000ULL + ticks_);
+                mode_ = Mode::Battle;
+            }
+            break;
+        case Mode::Battle:
+            if (battleScene_) {
+                battleScene_->update();
+                if (battleScene_->sawMove()) sawBattleMove_ = true;
+                if (battleScene_->finished()) {
+                    battleScene_.reset();
+                    mode_ = Mode::Overworld;
+                }
+            }
+            break;
+        }
+    }
+
+    void render(SDL_Renderer* r, float alpha) override {
+        if (mode_ == Mode::Battle && battleScene_) {
+            battleScene_->render(r, font_);
+            return;
+        }
+
+        SDL_SetRenderDrawColor(r, 16, 20, 32, 255);
+        SDL_RenderClear(r);
+        if (tileset_) map_.draw(r, *tileset_, 0.f, 0.f);
+        if (playerTex_) {
+            float x = player_.prevX + (player_.curX - player_.prevX) * alpha;
+            float y = player_.prevY + (player_.curY - player_.prevY) * alpha;
+            SDL_FRect dst{x, y, 16.f, 16.f};
+            SDL_RenderTexture(r, playerTex_->handle, nullptr, &dst);
+        }
+
+        if (mode_ == Mode::ToBattle) {   // strobe flash into the battle
+            SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+            Uint8 a = (transitionT_ / 4) % 2 ? 235 : 60;
+            SDL_SetRenderDrawColor(r, 250, 250, 255, a);
+            SDL_FRect full{0, 0, 320, 192};
+            SDL_RenderFillRect(r, &full);
+        }
+    }
+
+private:
+    enum class Mode { Overworld, ToBattle, Battle };
+
+    void updateOverworld(double dt) {
         auto& p = player_;
         p.prevX = p.curX;
         p.prevY = p.curY;
@@ -109,70 +176,6 @@ public:
         float u = std::min(p.t, 1.f);
         p.curX = ((1 - u) * p.tx + u * p.ttx) * ts;
         p.curY = ((1 - u) * p.ty + u * p.tty) * ts;
-
-        if (selftest_ && ticks_ == 30) battleTurn();
-    }
-
-    void render(SDL_Renderer* r, float alpha) override {
-        SDL_SetRenderDrawColor(r, 16, 20, 32, 255);
-        SDL_RenderClear(r);
-
-        if (tileset_) map_.draw(r, *tileset_, 0.f, 0.f);
-
-        if (playerTex_) {
-            float x = player_.prevX + (player_.curX - player_.prevX) * alpha;
-            float y = player_.prevY + (player_.curY - player_.prevY) * alpha;
-            SDL_FRect dst{x, y, 16.f, 16.f};
-            SDL_RenderTexture(r, playerTex_->handle, nullptr, &dst);
-        }
-
-        // Battle preview corners: our lead's back sprite, opponent's front.
-        if (monBack_) {
-            SDL_FRect dst{6.f, 192.f - 54.f, 48.f, 48.f};
-            SDL_RenderTexture(r, monBack_->handle, nullptr, &dst);
-        }
-        if (monFront_) {
-            SDL_FRect dst{320.f - 54.f, 6.f, 48.f, 48.f};
-            SDL_RenderTexture(r, monFront_->handle, nullptr, &dst);
-        }
-    }
-
-private:
-    void startBattle() {
-        battle_ = std::make_unique<battle::Battle>(*dex_, battle::Format{}, 0x1234ABCDULL);
-        battle_->setPlayer(0, "Player",
-                           {{.species = "emberling", .moves = {"ember", "tackle", "quickattack"}}});
-        battle_->setPlayer(1, "Rival",
-                           {{.species = "puddlit", .moves = {"watergun", "tackle"}}});
-        battle_->start();
-        logCursor_ = 0;
-        flushLog();
-    }
-
-    void battleTurn() {
-        if (!battle_ || battle_->ended()) startBattle();
-        for (int s = 0; s < 2; ++s) {
-            auto req = battle_->request(s);
-            if (req.kind == battle::Request::Kind::Move) {
-                int idx = 0;
-                for (int i = 0; i < static_cast<int>(req.moves.size()); ++i) {
-                    if (req.moves[i].pp > 0) { idx = i; break; }
-                }
-                battle_->choose(s, {battle::ChoiceKind::Move, idx});
-            } else if (req.kind == battle::Request::Kind::Switch && !req.switches.empty()) {
-                battle_->choose(s, {battle::ChoiceKind::Switch, req.switches.front()});
-            }
-        }
-        battle_->commitTurn();
-        flushLog();
-    }
-
-    void flushLog() {
-        const auto& lg = battle_->log();
-        for (; logCursor_ < lg.size(); ++logCursor_) {
-            std::puts(lg[logCursor_].c_str());
-            if (lg[logCursor_].rfind("|move|", 0) == 0) sawBattleMove_ = true;
-        }
     }
 
     void pollMapReload() {
@@ -200,13 +203,13 @@ private:
     std::filesystem::file_time_type mapMtime_;
     Texture* tileset_ = nullptr;
     Texture* playerTex_ = nullptr;
-    Texture* monFront_ = nullptr;
-    Texture* monBack_ = nullptr;
+    Font font_;
     Player player_;
 
     std::unique_ptr<battle::Dex> dex_;
-    std::unique_ptr<battle::Battle> battle_;
-    size_t logCursor_ = 0;
+    std::unique_ptr<BattleScene> battleScene_;
+    Mode mode_ = Mode::Overworld;
+    int transitionT_ = 0;
     bool sawBattleMove_ = false;
 
     uint64_t ticks_ = 0;
@@ -233,7 +236,7 @@ int main(int argc, char** argv) {
     if (!app.init(cfg)) return 1;
 
     DemoGame game(gameDir, selftest);
-    int rc = app.run(game, selftest ? 240 : -1);
+    int rc = app.run(game, selftest ? 600 : -1);
 
     if (selftest) {
         bool ok = rc == 0 && game.sawBattleMove();

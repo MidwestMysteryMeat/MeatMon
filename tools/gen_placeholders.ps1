@@ -67,6 +67,21 @@ New-Mon "puddlit"   72 120 216   # blue
 New-Mon "sprigling" 88 168 88    # green
 New-Mon "zapkin"    228 200 60   # yellow
 
+# --- font atlas: ASCII 32..127 in a 16x6 grid of 8x14 cells -------------------
+New-Png 128 84 "game/assets/fonts/mono.png" {
+    param($g, $bmp)
+    $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::SingleBitPerPixelGridFit
+    $font = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
+    $fmt = [System.Drawing.StringFormat]::GenericTypographic
+    $white = B 255 255 255
+    for ($c = 32; $c -lt 128; $c++) {
+        $col = ($c - 32) % 16
+        $row = [Math]::Floor(($c - 32) / 16)
+        $g.DrawString([string][char]$c, $font, $white, $col * 8, $row * 14 + 1, $fmt)
+    }
+    $font.Dispose()
+}
+
 # --- player (16x16) -----------------------------------------------------------
 New-Png 16 16 "game/assets/custom/player/front.png" {
     param($g, $bmp)

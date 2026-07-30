@@ -3,7 +3,8 @@ add_library(meatmon_engine STATIC
   src/texture.cpp
   src/assets.cpp
   src/tilemap.cpp
-  src/sprites.cpp)
+  src/sprites.cpp
+  src/font.cpp)
 
 target_include_directories(meatmon_engine PUBLIC include)
 target_link_libraries(meatmon_engine
