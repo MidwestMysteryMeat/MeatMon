@@ -93,6 +93,7 @@ Dex Dex::load(const std::filesystem::path& dataDir) {
         mv.hazard = v.value("hazard", "");
         mv.minHits = v.value("minHits", 1);
         mv.maxHits = v.value("maxHits", 1);
+        mv.charge = v.value("charge", false);
         dex.moves_.emplace(id, std::move(mv));
     }
 

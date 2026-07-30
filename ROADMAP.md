@@ -87,7 +87,11 @@ Runs in parallel with 1–2; `battle/` has no engine dependencies.
 - [x] Multi-hit moves: fixed (min==max) or weighted 2/3/4/5-hit (3/8,3/8,
       1/8,1/8), one accuracy roll for the whole move, independent crit/damage
       per hit, stops early on faint, `|-hitcount|` log line
-- [ ] Remaining move effect coverage (charge/two-turn, switch moves)
+- [x] Charge/two-turn moves: prepare turn charges (no damage, PP paid once),
+      auto-fires next turn without asking for a new choice (`beginTurn`
+      auto-fills the pending choice), release turn is a normal attack
+      subject to accuracy/Protect/etc.
+- [ ] Remaining move effect coverage (switch-on-hit moves)
 - [ ] Doubles/Triples: multi-slot sides, targeting rules
 - [ ] Generation mechanics switch (1–9): per-gen formula/typechart tables;
       cartridge vs Showdown RNG call-order parity

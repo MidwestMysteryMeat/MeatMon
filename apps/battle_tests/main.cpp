@@ -480,6 +480,23 @@ int main(int argc, char** argv) {
         CHECK(logContains(b, "|faint|p2a: Puddlit"));
     }
 
+    // --- charge moves: prepare turn deals no damage, fire on turn 2, single PP cost --
+    {
+        Battle b = makeBattle(dex, 100,
+            {{.species = "emberling", .moves = {"solarbeam"}}},
+            {{.species = "puddlit", .moves = {"growl"}}});
+
+        playTurns(b, 1, 0, 0);
+        CHECK(logContains(b, "|-prepare|p1a: Emberling|Solar Beam"));
+        CHECK(!logContains(b, "|-damage|p2a: Puddlit"));
+        CHECK(b.request(0).kind == Request::Kind::Wait);   // auto-fires, no choice asked
+
+        playTurns(b, 1, 0, 0);   // p1's choice is ignored/overridden this turn
+        CHECK(logContains(b, "|-damage|p2a: Puddlit"));
+        CHECK(b.side(0).monsters[0].moves[0].pp == 9);     // charged once, not twice
+        CHECK(b.request(0).kind == Request::Kind::Move);   // free to choose again
+    }
+
     // --- struggle kicks in when PP runs dry, with recoil, and ends the battle -------
     {
         Battle b = makeBattle(dex, 314,

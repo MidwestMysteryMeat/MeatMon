@@ -50,6 +50,7 @@ struct BattleMonster {
     bool flinched = false;           // volatile: cleared each turn
     int substituteHp = 0;            // volatile: 0 = none, absorbs hits/status
     bool protecting = false;         // this turn only; re-chosen each turn
+    std::string chargingMove;        // two-turn move id mid-charge, else empty
     bool movedThisTurn = false;
 
     bool fainted() const { return hp <= 0; }

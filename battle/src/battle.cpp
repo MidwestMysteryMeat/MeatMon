@@ -147,6 +147,7 @@ void Battle::switchIn(int side, int index) {
     p.flinched = false;
     p.substituteHp = 0;
     p.protecting = false;
+    p.chargingMove.clear();
     std::ostringstream os;
     os << "|switch|" << tag(side) << "|" << p.species->name << ", L" << p.level
        << "|" << hpOf(p);
@@ -160,9 +161,18 @@ void Battle::beginTurn() {
     pending_[0] = pending_[1] = true;
     choices_[0] = choices_[1] = Choice{};
     for (int s = 0; s < 2; ++s) {
-        if (sides_[s].active >= 0) {
-            active(s).movedThisTurn = false;
-            active(s).protecting = false;   // must be re-chosen to stay up
+        if (sides_[s].active < 0) continue;
+        auto& p = active(s);
+        p.movedThisTurn = false;
+        p.protecting = false;           // must be re-chosen to stay up
+        if (!p.chargingMove.empty()) {  // two-turn move: auto-fire, no choice asked
+            for (int i = 0; i < static_cast<int>(p.moves.size()); ++i) {
+                if (p.moves[i].id == p.chargingMove) {
+                    choices_[s] = {ChoiceKind::Move, i};
+                    pending_[s] = false;
+                    break;
+                }
+            }
         }
     }
     phase_ = Phase::Choices;
@@ -435,16 +445,25 @@ void Battle::executeMove(int atkSide, int moveIndex) {
     if (!beforeMove(atkSide)) return;
 
     const Move* move = nullptr;
+    bool releasing = false;   // second turn of a two-turn move already charged
     if (moveIndex < 0) {
         move = &kStruggle;
     } else {
         auto& slot = user.moves[moveIndex];
         move = dex_.move(slot.id);
         if (!move) return;
-        if (slot.pp > 0) --slot.pp;
+        releasing = !user.chargingMove.empty() && user.chargingMove == slot.id;
+        if (slot.pp > 0 && !releasing) --slot.pp;   // charge turn pays the only PP cost
     }
 
     log_.push_back("|move|" + tag(atkSide) + "|" + move->name + "|" + tag(defSide));
+
+    if (move->charge && !releasing) {
+        user.chargingMove = move->id;
+        log_.push_back("|-prepare|" + tag(atkSide) + "|" + move->name);
+        return;
+    }
+    if (releasing) user.chargingMove.clear();
 
     if (!move->targetSelf && move->hazard.empty() && target.protecting) {
         log_.push_back("|-activate|" + tag(defSide) + "|Protect");

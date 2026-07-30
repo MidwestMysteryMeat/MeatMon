@@ -46,6 +46,7 @@ struct Move {
     bool isProtect = false;           // status move: block the foe's hit this turn
     std::string hazard;               // status move: "spikes"/"stealthrock" (foe's side)
     int minHits = 1, maxHits = 1;     // e.g. 2..5 for Fury-Attack-style moves
+    bool charge = false;              // two-turn: prepare, then auto-fire next turn
 };
 
 // Abilities/items are declarative data fields interpreted by the sim.

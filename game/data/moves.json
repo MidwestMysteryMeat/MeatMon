@@ -270,5 +270,15 @@
     "contact": true,
     "minHits": 2,
     "maxHits": 2
+  },
+  "solarbeam": {
+    "name": "Solar Beam",
+    "type": "grass",
+    "category": "special",
+    "power": 120,
+    "accuracy": 100,
+    "priority": 0,
+    "pp": 10,
+    "charge": true
   }
 }
