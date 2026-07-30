@@ -29,9 +29,15 @@ build\apps\game\Debug\meatmon.exe
   species editor, team builder, battle tester, sprite pixel editor, and a
   raw file editor. See [EDITOR.md](EDITOR.md).
 - **F5 / F9** — save / load (`game/saves/save.json`, versioned JSON). Quitting
-  autosaves. Party HP and status persist between battles — the villager heals
-  your team (any entity with `"heals": true` does).
+  autosaves. Party HP, status, and EXP persist between battles — the
+  villager heals your team (any entity with `"heals": true` does).
 - Esc (overworld) — save and quit
+
+Walking onto a warp tile loads the target map (see `game/maps/meadow.json`
+for the shape); walking onto a tall-grass tile can trigger a wild encounter
+from that map's `encounters` table, dropping you into a battle with a
+CATCH option. Winning any battle — trainer or wild — levels up whichever
+monster was on the field when it ended; a catch does not grant EXP.
 
 ## Author an NPC or trainer (no code)
 
@@ -50,6 +56,17 @@ build\apps\battle_cli\Debug\battle_cli.exe --seed 42  # different, reproducible
 ```
 
 Smoke test (CI-friendly, exits 0/1): `meatmon.exe --selftest`
+
+Headless screenshot (auto-exits, no interaction needed):
+
+```powershell
+build\apps\game\Debug\meatmon.exe --shot "30:out.png"
+```
+
+`--shot` is repeatable (`--shot "30:a.png" --shot "90:b.png"`); each captures
+the frame at that tick to a PNG via `SDL_RenderReadPixels`. Combine with
+`--selftest` to piggyback its scripted trainer battle and F1 editor toggle —
+that's how `docs/screenshots/*.png` were generated.
 
 ## Drop in your own sprites
 
@@ -77,12 +94,40 @@ Append to `game/data/species.json`:
   "name": "Rockling",
   "num": 5,
   "types": ["rock"],
-  "baseStats": { "hp": 50, "atk": 70, "def": 90, "spa": 35, "spd": 45, "spe": 30 }
+  "baseStats": { "hp": 50, "atk": 70, "def": 90, "spa": 35, "spd": 45, "spe": 30 },
+  "catchRate": 90,
+  "baseExpYield": 65
 }
 ```
 
-Drop art at `game/assets/custom/rockling/front.png` (or a PokeAPI `5.png`).
-Battle data reloads when a new battle starts; no rebuild.
+`catchRate` (1-255, higher = easier) and `baseExpYield` (EXP awarded, scaled
+by the defeated mon's level) are both optional — they default to 128 and 60
+if omitted. Drop art at `game/assets/custom/rockling/front.png` (or a
+PokeAPI `5.png`). Battle data reloads when a new battle starts; no rebuild.
+
+## Add a move effect
+
+Moves are data too — `game/data/moves.json` composes effects from optional
+fields rather than code per move:
+
+| Field | Effect |
+|---|---|
+| `status` / `volatile` (+ `target: "self"`) | Inflict a status/volatile on self or foe |
+| `secondary: { chance, status, volatile }` | Chance-based rider on a damaging hit |
+| `boosts: { atk: 1, ... }` | Stat stage changes (-6..+6) |
+| `weather` | `"rain"`/`"sun"`/`"sandstorm"`/`"hail"`, 5 turns |
+| `hazard` | `"spikes"` or `"stealthrock"`, targets the foe's side |
+| `healPercent` | Heals this % of max HP |
+| `recoilPercent` | User takes this % of damage dealt as recoil |
+| `minHits` / `maxHits` | Multi-hit (equal = fixed count, otherwise weighted 2-5) |
+| `charge: true` | Two-turn move: prepare, then auto-fires next turn |
+| `protect: true` | Blocks the foe's hit this turn only (needs `priority: 4`-ish to go first) |
+| `contact: true` | Triggers Static-style contact abilities |
+
+See `battle/include/meatmon/battle/dex.hpp` (`Move` struct) for the
+authoritative field list, and ARCHITECTURE.md §4.2 for how this composes
+with abilities/items. A new *mechanic* (not just a new use of an existing
+field) is a small `Battle::executeMove` change, not a data-only addition.
 
 ## Write your first NPC script
 

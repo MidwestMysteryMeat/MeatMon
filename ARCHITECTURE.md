@@ -84,18 +84,28 @@ All battle content loads at runtime from `game/data/`:
 
 | File            | Contents                                              |
 |-----------------|--------------------------------------------------------|
-| `species.json`  | id → name, dex num (sprite key), types, base stats     |
-| `moves.json`    | id → name, type, category, power, accuracy, priority, PP |
+| `species.json`  | id → name, dex num (sprite key), types, base stats, `catchRate`, `baseExpYield` |
+| `moves.json`    | id → name, type, category, power, accuracy, priority, PP, plus optional effect fields (see below) |
 | `typechart.json`| attacking type → { defending type → multiplier }       |
 | `natures.json`  | id → boosted/hindered stat                             |
+| `abilities.json`| id → name, declarative hook fields (switch-in foe boosts, type immunity, pinch-boost type, contact-status chance) |
+| `items.json`    | id → name, declarative hook fields (per-turn heal fraction, heal-below-half flat amount, consumable) |
 
 `mm::battle::Dex::load(dir)` parses these into immutable tables. Hot-reload of
 battle data means: throw away the Dex, load again, start a new battle. Battles
 in flight are never mutated by a reload.
 
-Abilities, items, and per-generation mechanics tables land in Phase 3 as more
-JSON files plus (where behaviour is needed) Lua callbacks — never hardcoded
-C++ switch statements per species.
+A move's effect is composed from optional data fields on `Move` rather than a
+per-move C++ branch: `status`/`volatileStatus` (+ `targetSelf`), `secondaryStatus`/
+`secondaryVolatile`/`secondaryChance`, `boosts`, `weather`, `hazard`,
+`healPercent`, `recoilPercent`, `minHits`/`maxHits`, `charge`, `protect`,
+`contact`. Abilities and items are the same idea one level up: a handful of
+named hook fields (`switchInFoeBoosts`, `immuneType`, `pinchBoostType`,
+`contactStatus`, `healEachTurnDen`, `healBelowHalf`, `consumable`) that
+`Battle` checks at the right points, instead of hardcoded per-species
+behaviour. New content that fits an existing field is data-only; a genuinely
+new *mechanic* (a new field + the `Battle` code that reads it) is still a
+small, targeted C++ change — never a Lua-escape-hatch until Phase 4 lands.
 
 ### 4.3 Core objects
 
@@ -141,16 +151,41 @@ roadmap. Same seed + same choices ⇒ byte-identical log, on every platform.
 
 Implemented now: stat calc (EV/IV/nature), full 18-type chart, STAB, crits,
 damage rolls, accuracy, priority/speed ordering with seeded ties, faint→switch
-flow, win detection, protocol log, JSON state snapshot (`serialize()`);
-status conditions (brn/par/psn/tox/slp/frz) with immunities, turn gates,
-residuals, and burn/para stat effects; stat boosts (±6 stages) from
-data-driven status moves; secondary-effect riders; Struggle with recoil.
-A regression suite (`apps/battle_tests`, run via CTest) pins stat formulas,
-the chart, determinism, and golden status/boost/struggle scenarios.
-Stubbed: volatiles (confusion/flinch/etc.), abilities, items,
-weather/terrain, multi-target formats (Doubles/Triples data model exists in
-`Format` but mechanics enforce singles), full serialization round-trip.
-See ROADMAP Phase 3.
+flow (hazard-fainted entrants correctly re-request a switch instead of being
+left fainted), win detection, protocol log, partial JSON state snapshot
+(`serialize()` — see below); status conditions (brn/par/psn/tox/slp/frz) with
+immunities, turn gates, residuals, and burn/para stat effects; stat boosts
+(±6 stages) from data-driven status moves; secondary-effect riders; Struggle
+with its flat 1/4-max-HP recoil plus general recoil-by-fraction-of-damage for
+other moves; volatiles (confusion, flinch, Substitute — absorbs hits/status
+until it breaks); abilities and items as declarative data with real hook
+points (Intimidate-style switch-in boosts, Levitate-style type immunity,
+Blaze-style pinch damage boost, Static-style contact status, Leftovers-style
+per-turn heal, berry-style heal-below-half); weather (rain/sun damage
+multipliers, sandstorm/hail chip damage, 5-turn duration); Protect and
+healing moves; entry hazards (Spikes, Stealth Rock); multi-hit moves (fixed
+or classic 3/8·3/8·1/8·1/8 weighted 2-5 hit); charge/two-turn moves (the
+release turn auto-fires via a `beginTurn`-level choice override, no new
+protocol state needed). A regression suite (`apps/battle_tests`, run via
+CTest, ~40 golden scenarios / 100+ assertions) pins stat formulas, the
+chart, determinism, and at least one scenario per mechanic above.
+
+Progression (EXP/leveling) is intentionally *not* in `Battle` — it's pure
+functions in `battle/team.{hpp,cpp}` (`expForLevel`, `gainExp`,
+`expYieldFor`) that the game layer calls after a battle ends, so the sim
+itself stays free of RPG-progression concepts while the math still lives
+somewhere testable without SDL.
+
+Stubbed/not yet built: terrain, remaining situational volatiles (leech seed,
+taunt, encore, …), switch-on-hit moves (Volt Switch/U-turn style), multi-target
+formats (Doubles/Triples — the `Format` data model exists but mechanics
+enforce singles), per-generation mechanics tables (cartridge vs. Showdown RNG
+call-order parity), team validation/import-export, and a *full* state
+serialization round-trip (`serialize()` covers turn/phase/winner/RNG state/
+weather/party HP-status-confusion-substitute/moves+PP, but doesn't yet
+reconstruct a live `Battle` from that JSON — round-trip is one-directional
+today). See ROADMAP Phase 3 for the live, line-by-line checklist; this
+section only needs to stay directionally correct, not byte-for-byte synced.
 
 ## 5. Asset pipeline
 
@@ -188,11 +223,23 @@ gitignored — sprite rips are copyrighted and stay on local disks only.
 ## 6. Overworld model
 
 - `Tilemap`: JSON maps with `ground`, `objects`, `collision` layers (row-major
-  int arrays into a single-row tileset image), `tile_size`, plus `warps` and
-  `events` arrays (loaded, consumed from Phase 2 on).
+  int arrays into a single-row tileset image), `tile_size`, an `entities`
+  array, a parsed `warpList` (tile → target map + tile), and raw `encounters`
+  JSON (`tiles`, `rate` out of 256, a weighted species/level/moveset table) —
+  the engine parses the warp list, the game layer interprets encounters.
 - Movement is **grid-stepped**: an entity occupies a tile, animates to the
   next over N ticks, input is sampled only when aligned. Collision is a layer
   lookup, not physics.
+- **Multi-map**: stepping onto a warp tile loads the target map file and
+  repositions the player; the current map name is part of the save (v1). No
+  camera/scrolling yet — every shipped map is exactly screen-sized
+  (20×12 tiles = 320×192), so there's nothing to scroll until a bigger map
+  exists (Phase 1, tracked honestly as unchecked).
+- **Wild encounters**: on the tile a step lands on, a weighted roll against
+  the map's `encounters` table can start a wild battle (`BattleScene` in
+  "wild" mode, adding a CATCH menu entry). Catching uses a classic
+  catch-value formula off the species' `catchRate`, current HP fraction, and
+  status; a caught monster joins the party directly (no PC boxes yet).
 - Entities are a closed set with plain-struct state; behaviour comes from Lua
   (Phase 4), not C++ subclasses.
 
@@ -228,11 +275,13 @@ gitignored — sprite rips are copyrighted and stay on local disks only.
 ## 9. Saves
 
 JSON with a versioned `"save_version"` field (migrations run oldest→newest).
-v1 is live: position/facing, defeated trainers, playtime, and the party as
-`MonsterSet` JSON with carried `hp`/`status` — battles start from party
-state (`Battle::start` honours carried HP/status and skips fainted leads)
-and write results back. Boxes, bag, dex flags, and script vars join in v2.
-Binary packing is a Phase 7 optimization only if profiling demands it.
+v1 is live: current map name, position/facing, defeated trainers, playtime,
+and the party as `MonsterSet` JSON with carried `hp`/`status`/`exp` — battles
+start from party state (`Battle::start` honours carried HP/status and skips
+fainted leads), write HP/status results back, and a win runs the active
+mon's `MonsterSet` through `gainExp` (see §4.6) before the next save. Boxes,
+bag, dex flags, and script vars join in v2. Binary packing is a Phase 7
+optimization only if profiling demands it.
 
 ## 10. Conventions
 

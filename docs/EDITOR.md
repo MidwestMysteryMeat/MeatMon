@@ -14,7 +14,11 @@ and the player team after JSON edits).
 **Tiles** — pick a layer (ground / objects / collision) and paint with the
 left mouse button; right button erases. The palette comes straight from the
 map's tileset image, so adding tiles to `overworld.png` grows the palette.
-Collision mode shows a red overlay. *Save map* writes `game/maps/demo.json`.
+Collision mode shows a red overlay. *Save map* writes the currently loaded
+map file (e.g. `game/maps/demo.json` or `meadow.json`), preserving `warps`
+and `encounters` verbatim even though there's no panel to edit them yet
+(hand-author those in the Files panel or a text editor — structured warp/
+encounter editing is Map editor v2, see ROADMAP.md).
 
 **Entities** — list, add (+ NPC / + Trainer), delete, and edit entities:
 position (type numbers or check *Place with click*, then click the map),
@@ -25,7 +29,8 @@ trainers the team as JSON with validation. Saved with the map.
 number (sprite key), one or two types, base stat sliders. *Apply & save*
 writes the file and reloads the Dex immediately. *New* creates a species
 with sane defaults — give it art via the Sprite studio and it's battle-ready
-with zero code.
+with zero code. `catchRate` and `baseExpYield` aren't in this panel yet;
+edit them via the Files panel (or a text editor) until it catches up.
 
 **Team builder** — edits `game/data/player.json` with dropdowns populated
 from the Dex: species, level, nature, ability, item, four moves. Saving
