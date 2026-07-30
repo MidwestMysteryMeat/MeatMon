@@ -369,11 +369,26 @@ private:
     }
 
     void endBattle() {
+        std::string levelMsg;
         if (const auto* b = battleScene_->battle()) {   // party HP/status carry
             const auto& mons = b->side(0).monsters;
             for (size_t i = 0; i < playerTeam_.size() && i < mons.size(); ++i) {
                 playerTeam_[i].hp = mons[i].hp;
                 playerTeam_[i].status = mons[i].status;
+            }
+            if (battleScene_->playerWon()) {            // EXP for the mon that won
+                int idx = b->side(0).active;
+                int foeIdx = b->side(1).active;
+                if (idx >= 0 && idx < static_cast<int>(playerTeam_.size()) && foeIdx >= 0) {
+                    const auto& winner = b->side(0).monsters[idx];
+                    const auto& foe = b->side(1).monsters[foeIdx];
+                    int gained = battle::expYieldFor(*foe.species, foe.level);
+                    int levels = battle::gainExp(playerTeam_[idx], gained);
+                    if (levels > 0) {
+                        levelMsg = winner.name + " grew to Lv. " +
+                                   std::to_string(playerTeam_[idx].level) + "!";
+                    }
+                }
             }
         }
         if (battleScene_->playerWon() && !pendingTrainer_.id.empty()) {
@@ -392,6 +407,8 @@ private:
             dlg_.push_back("You have no monsters left...");
             dlg_.push_back("(Your team was rushed to rest and fully healed.)");
             mode_ = Mode::Dialogue;
+        } else if (!levelMsg.empty()) {
+            toast(levelMsg);
         } else {
             mode_ = Mode::Overworld;
         }

@@ -20,6 +20,7 @@ struct Species {
     std::vector<std::string> types;  // 1-2 type ids
     StatTable baseStats;
     int catchRate = 128;             // 1..255, higher = easier to catch
+    int baseExpYield = 60;           // EXP awarded (scaled by level) for defeat
 };
 
 struct Move {

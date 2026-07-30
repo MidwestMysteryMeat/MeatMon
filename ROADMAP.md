@@ -49,6 +49,10 @@ competitive battles?* If no, it doesn't get a phase.
       humanized message box, sprite slots via `SpriteLibrary`, flee (Esc)
 - [x] Catch flow: wild-only CATCH menu entry, classic catch-value formula off
       species `catchRate` + HP fraction + status, caught mon joins the party
+- [x] EXP & leveling: cubic curve capped at 100, species `baseExpYield`,
+      awarded to the mon active at a win (trainer or wild, not catches);
+      carried on `MonsterSet.exp` so it survives saves; "grew to Lv. N!"
+      toast on level-up
 - [ ] Battle scene v2: attack/faint animations, exp bar
 - [x] Trainer battles from entity data (talk to fight, defeat remembered for
       the session, `teamFromJson` shared with saves/network)

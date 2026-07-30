@@ -4,27 +4,31 @@
     "num": 1,
     "types": ["fire"],
     "baseStats": { "hp": 39, "atk": 52, "def": 43, "spa": 60, "spd": 50, "spe": 65 },
-    "catchRate": 45
+    "catchRate": 45,
+    "baseExpYield": 62
   },
   "puddlit": {
     "name": "Puddlit",
     "num": 2,
     "types": ["water"],
     "baseStats": { "hp": 44, "atk": 48, "def": 65, "spa": 50, "spd": 64, "spe": 43 },
-    "catchRate": 45
+    "catchRate": 45,
+    "baseExpYield": 63
   },
   "sprigling": {
     "name": "Sprigling",
     "num": 3,
     "types": ["grass", "poison"],
     "baseStats": { "hp": 45, "atk": 49, "def": 49, "spa": 65, "spd": 65, "spe": 45 },
-    "catchRate": 45
+    "catchRate": 45,
+    "baseExpYield": 64
   },
   "zapkin": {
     "name": "Zapkin",
     "num": 4,
     "types": ["electric"],
     "baseStats": { "hp": 35, "atk": 55, "def": 40, "spa": 50, "spd": 50, "spe": 90 },
-    "catchRate": 120
+    "catchRate": 120,
+    "baseExpYield": 61
   }
 }

@@ -23,6 +23,7 @@ struct MonsterSet {
     // a fresh monster. hp -1 = full; hp 0 = fainted (skipped as lead).
     int hp = -1;
     std::string status;                      // "", brn, par, psn, tox, slp, frz
+    int exp = 0;                             // cumulative; see team.hpp gainExp
 };
 
 struct MoveSlot {

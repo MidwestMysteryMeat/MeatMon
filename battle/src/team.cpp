@@ -1,5 +1,7 @@
 #include "meatmon/battle/team.hpp"
 
+#include <algorithm>
+
 namespace mm::battle {
 
 namespace {
@@ -29,6 +31,7 @@ MonsterSet monsterSetFromJson(const nlohmann::json& j) {
     if (j.contains("ivs")) set.ivs = statsFrom(j["ivs"], set.ivs);
     set.hp = j.value("hp", -1);
     set.status = j.value("status", "");
+    set.exp = j.value("exp", 0);
     return set;
 }
 
@@ -56,6 +59,7 @@ nlohmann::json monsterSetToJson(const MonsterSet& set) {
     j["ivs"] = stats(set.ivs);
     if (set.hp >= 0) j["hp"] = set.hp;
     if (!set.status.empty()) j["status"] = set.status;
+    if (set.exp > 0) j["exp"] = set.exp;
     return j;
 }
 
@@ -63,6 +67,27 @@ nlohmann::json teamToJson(const std::vector<MonsterSet>& team) {
     nlohmann::json arr = nlohmann::json::array();
     for (const auto& s : team) arr.push_back(monsterSetToJson(s));
     return arr;
+}
+
+long long expForLevel(int level) {
+    if (level <= 1) return 0;
+    long long l = level;
+    return l * l * l;
+}
+
+int gainExp(MonsterSet& set, int gained) {
+    if (set.level >= 100 || gained <= 0) return 0;
+    set.exp += gained;
+    int levels = 0;
+    while (set.level < 100 && set.exp >= expForLevel(set.level + 1)) {
+        ++set.level;
+        ++levels;
+    }
+    return levels;
+}
+
+int expYieldFor(const Species& foeSpecies, int foeLevel) {
+    return std::max(1, foeSpecies.baseExpYield * foeLevel / 7);
 }
 
 } // namespace mm::battle

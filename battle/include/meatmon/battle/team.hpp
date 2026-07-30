@@ -16,9 +16,20 @@ namespace mm::battle {
 MonsterSet monsterSetFromJson(const nlohmann::json& j);
 std::vector<MonsterSet> teamFromJson(const nlohmann::json& array);
 
-// Round-trip (saves, editor, network). Carried hp/status are written only
-// when set, so authored team files stay clean.
+// Round-trip (saves, editor, network). Carried hp/status/exp are written
+// only when set, so authored team files stay clean.
 nlohmann::json monsterSetToJson(const MonsterSet& set);
 nlohmann::json teamToJson(const std::vector<MonsterSet>& team);
+
+// Progression (RPG overworld layer, not the battle sim itself — computed
+// after a battle ends and applied to the surviving MonsterSet).
+//
+// Cumulative EXP required to BE at `level` (cubic curve, capped at 100).
+long long expForLevel(int level);
+// Adds `gained` to set.exp, leveling up in place while thresholds are
+// crossed. No-op past level 100. Returns levels gained (0 if none).
+int gainExp(MonsterSet& set, int gained);
+// EXP awarded for defeating a monster of `foeSpecies` at `foeLevel`.
+int expYieldFor(const Species& foeSpecies, int foeLevel);
 
 } // namespace mm::battle

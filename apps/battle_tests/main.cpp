@@ -285,6 +285,46 @@ int main(int argc, char** argv) {
         CHECK(back[0].item == "leftovers" && back[0].nature == "timid");
     }
 
+    // --- team JSON round-trip preserves carried exp -----------------------------------
+    {
+        MonsterSet s{.species = "emberling", .level = 12, .moves = {"tackle"}};
+        s.exp = 900;
+        auto back = teamFromJson(teamToJson({s}));
+        CHECK(back.size() == 1 && back[0].exp == 900);
+    }
+
+    // --- EXP curve, leveling, and the level-100 cap -----------------------------------
+    {
+        CHECK(expForLevel(1) == 0);
+        CHECK(expForLevel(2) == 8);
+        CHECK(expForLevel(50) == 125000);
+        CHECK(expForLevel(100) == 1000000);
+
+        MonsterSet s{.species = "emberling", .level = 1, .moves = {"tackle"}};
+        int levels = gainExp(s, 7);             // just under level 2's threshold
+        CHECK(levels == 0 && s.level == 1 && s.exp == 7);
+
+        levels = gainExp(s, 1);                 // crosses into level 2
+        CHECK(levels == 1 && s.level == 2 && s.exp == 8);
+
+        MonsterSet big{.species = "emberling", .level = 1, .moves = {"tackle"}};
+        levels = gainExp(big, 1000000);         // enough for many levels at once
+        CHECK(levels > 1 && big.level > 1 && big.level <= 100);
+
+        MonsterSet capped{.species = "emberling", .level = 100, .moves = {"tackle"}};
+        levels = gainExp(capped, 999999);
+        CHECK(levels == 0 && capped.level == 100 && capped.exp == 0);   // no-op past 100
+    }
+
+    // --- EXP yield scales with the defeated species and level -------------------------
+    {
+        const Species* zap = dex.species("zapkin");
+        CHECK(zap != nullptr);
+        CHECK(expYieldFor(*zap, 7) == zap->baseExpYield);   // level/7 == 1x at level 7
+        CHECK(expYieldFor(*zap, 50) > expYieldFor(*zap, 7));
+        CHECK(expYieldFor(*zap, 1) >= 1);                   // never rounds to 0
+    }
+
     // --- substitute: costs 1/4 max HP and blocks a status move the same turn --------
     {
         Battle b = makeBattle(dex, 50,
