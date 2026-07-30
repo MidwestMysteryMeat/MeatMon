@@ -442,6 +442,44 @@ int main(int argc, char** argv) {
         CHECK(b.side(0).stealthRock);
     }
 
+    // --- multi-hit: variable count lands 2-5 hits and logs a hitcount --------------
+    {
+        Battle b = makeBattle(dex, 90,
+            {{.species = "emberling", .moves = {"furyattack"}}},
+            {{.species = "puddlit", .moves = {"growl"}}});
+        playTurns(b, 1, 0, 0);
+        bool foundCount = false;
+        for (const auto& line : b.log()) {
+            auto pos = line.find("|-hitcount|p2a: Puddlit|");
+            if (pos == std::string::npos) continue;
+            int n = std::stoi(line.substr(pos + std::string("|-hitcount|p2a: Puddlit|").size()));
+            CHECK(n >= 2 && n <= 5);
+            foundCount = true;
+        }
+        CHECK(foundCount);
+    }
+
+    // --- multi-hit: fixed count (min == max) always lands exactly that many --------
+    {
+        Battle b = makeBattle(dex, 91,
+            {{.species = "emberling", .moves = {"doubleslap"}}},
+            {{.species = "puddlit", .moves = {"growl"}}});
+        playTurns(b, 1, 0, 0);
+        CHECK(logContains(b, "|-hitcount|p2a: Puddlit|2"));
+    }
+
+    // --- multi-hit stops early if the target faints mid-sequence -------------------
+    {
+        MonsterSet frail{.species = "puddlit", .moves = {"growl"}};
+        frail.hp = 1;
+        Battle b(dex, Format{}, 92);
+        b.setPlayer(0, "A", {{.species = "emberling", .moves = {"furyattack"}}});
+        b.setPlayer(1, "B", {frail});
+        b.start();
+        playTurns(b, 1, 0, 0);
+        CHECK(logContains(b, "|faint|p2a: Puddlit"));
+    }
+
     // --- struggle kicks in when PP runs dry, with recoil, and ends the battle -------
     {
         Battle b = makeBattle(dex, 314,

@@ -84,7 +84,10 @@ Runs in parallel with 1–2; `battle/` has no engine dependencies.
 - [x] Entry hazards: Spikes (1-3 layers, grounded only, 1/8-1/4 max HP) and
       Stealth Rock (rock-type effectiveness, hits everyone); applied on
       switch-in, can faint the incoming mon (forces another switch)
-- [ ] Remaining move effect coverage (multi-hit, charge, switch moves)
+- [x] Multi-hit moves: fixed (min==max) or weighted 2/3/4/5-hit (3/8,3/8,
+      1/8,1/8), one accuracy roll for the whole move, independent crit/damage
+      per hit, stops early on faint, `|-hitcount|` log line
+- [ ] Remaining move effect coverage (charge/two-turn, switch moves)
 - [ ] Doubles/Triples: multi-slot sides, targeting rules
 - [ ] Generation mechanics switch (1–9): per-gen formula/typechart tables;
       cartridge vs Showdown RNG call-order parity

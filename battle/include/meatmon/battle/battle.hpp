@@ -140,6 +140,7 @@ private:
     void weatherDamage(int side);            // sandstorm/hail chip damage
     void setHazard(int side, const std::string& hazard);   // Spikes/Stealth Rock
     void applyHazards(int side);             // damage on switch-in
+    int rollHitCount();                      // 2/3/4/5-hit weighting (3/8,3/8,1/8,1/8)
 
     const Dex& dex_;
     Format format_;

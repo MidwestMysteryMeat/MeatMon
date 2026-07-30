@@ -91,6 +91,8 @@ Dex Dex::load(const std::filesystem::path& dataDir) {
         mv.recoilPercent = v.value("recoilPercent", 0);
         mv.isProtect = v.value("protect", false);
         mv.hazard = v.value("hazard", "");
+        mv.minHits = v.value("minHits", 1);
+        mv.maxHits = v.value("maxHits", 1);
         dex.moves_.emplace(id, std::move(mv));
     }
 

@@ -503,64 +503,77 @@ void Battle::executeMove(int atkSide, int moveIndex) {
         return;
     }
 
-    bool crit = rng_.chance(1, 24);
     bool physical = move->category == MoveCategory::Physical;
-    int atkStat = physical ? calc::applyStage(user.stats.atk, user.boosts.atk)
-                           : calc::applyStage(user.stats.spa, user.boosts.spa);
-    int defStat = physical ? calc::applyStage(target.stats.def, target.boosts.def)
-                           : calc::applyStage(target.stats.spd, target.boosts.spd);
+    int hits = move->minHits == move->maxHits
+                   ? move->minHits
+                   : std::clamp(rollHitCount(), move->minHits, move->maxHits);
+    int landed = 0;
+    int totalDealt = 0;
+    bool hitSub = false;
+    for (int h = 0; h < hits && !target.fainted(); ++h) {
+        bool crit = rng_.chance(1, 24);
+        int atkStat = physical ? calc::applyStage(user.stats.atk, user.boosts.atk)
+                               : calc::applyStage(user.stats.spa, user.boosts.spa);
+        int defStat = physical ? calc::applyStage(target.stats.def, target.boosts.def)
+                               : calc::applyStage(target.stats.spd, target.boosts.spd);
 
-    // Published damage formula, integer chain matching game behaviour.
-    int dmg = ((2 * user.level / 5 + 2) * move->basePower * atkStat / defStat) / 50 + 2;
-    if (crit) dmg = dmg * 3 / 2;
-    dmg = dmg * rng_.damageRoll() / 100;
-    bool stab = std::find(user.species->types.begin(), user.species->types.end(),
-                          move->type) != user.species->types.end();
-    if (stab) dmg = dmg * 3 / 2;
-    if (!user.ability.empty()) {             // Blaze-style pinch boost
-        const Ability* ab = dex_.ability(user.ability);
-        if (ab && !ab->pinchBoostType.empty() && ab->pinchBoostType == move->type &&
-            user.hp * 3 <= user.stats.hp) {
-            dmg = dmg * 3 / 2;
+        // Published damage formula, integer chain matching game behaviour.
+        int dmg = ((2 * user.level / 5 + 2) * move->basePower * atkStat / defStat) / 50 + 2;
+        if (crit) dmg = dmg * 3 / 2;
+        dmg = dmg * rng_.damageRoll() / 100;
+        bool stab = std::find(user.species->types.begin(), user.species->types.end(),
+                              move->type) != user.species->types.end();
+        if (stab) dmg = dmg * 3 / 2;
+        if (!user.ability.empty()) {         // Blaze-style pinch boost
+            const Ability* ab = dex_.ability(user.ability);
+            if (ab && !ab->pinchBoostType.empty() && ab->pinchBoostType == move->type &&
+                user.hp * 3 <= user.stats.hp) {
+                dmg = dmg * 3 / 2;
+            }
         }
-    }
-    dmg = static_cast<int>(dmg * typeMult);
-    if (weather_ == "rain") {
-        if (move->type == "water") dmg = dmg * 3 / 2;
-        else if (move->type == "fire") dmg /= 2;
-    } else if (weather_ == "sun") {
-        if (move->type == "fire") dmg = dmg * 3 / 2;
-        else if (move->type == "water") dmg /= 2;
-    }
-    if (physical && user.status == "brn") dmg /= 2;   // burn: 0.5x physical
-    if (dmg < 1) dmg = 1;
+        dmg = static_cast<int>(dmg * typeMult);
+        if (weather_ == "rain") {
+            if (move->type == "water") dmg = dmg * 3 / 2;
+            else if (move->type == "fire") dmg /= 2;
+        } else if (weather_ == "sun") {
+            if (move->type == "fire") dmg = dmg * 3 / 2;
+            else if (move->type == "water") dmg /= 2;
+        }
+        if (physical && user.status == "brn") dmg /= 2;   // burn: 0.5x physical
+        if (dmg < 1) dmg = 1;
 
-    if (crit) log_.push_back("|-crit|" + tag(defSide));
-    if (typeMult > 1.0) log_.push_back("|-supereffective|" + tag(defSide));
-    else if (typeMult < 1.0) log_.push_back("|-resisted|" + tag(defSide));
+        if (crit) log_.push_back("|-crit|" + tag(defSide));
+        if (typeMult > 1.0) log_.push_back("|-supereffective|" + tag(defSide));
+        else if (typeMult < 1.0) log_.push_back("|-resisted|" + tag(defSide));
 
-    bool hitSub = target.substituteHp > 0;
-    if (hitSub) {
-        // The substitute absorbs the hit; no HP, status or faint for the
-        // real monster, and no leftover damage carries past it breaking.
-        if (dmg >= target.substituteHp) {
-            target.substituteHp = 0;
-            log_.push_back("|-end|" + tag(defSide) + "|Substitute");
+        hitSub = target.substituteHp > 0;
+        if (hitSub) {
+            // The substitute absorbs the hit; no HP, status or faint for the
+            // real monster, and no leftover damage carries past it breaking.
+            if (dmg >= target.substituteHp) {
+                target.substituteHp = 0;
+                log_.push_back("|-end|" + tag(defSide) + "|Substitute");
+            } else {
+                target.substituteHp -= dmg;
+                log_.push_back("|-activate|" + tag(defSide) + "|Substitute|[damage]");
+            }
         } else {
-            target.substituteHp -= dmg;
-            log_.push_back("|-activate|" + tag(defSide) + "|Substitute|[damage]");
-        }
-    } else {
-        target.hp = std::max(0, target.hp - dmg);
-        log_.push_back("|-damage|" + tag(defSide) + "|" + hpOf(target));
+            target.hp = std::max(0, target.hp - dmg);
+            log_.push_back("|-damage|" + tag(defSide) + "|" + hpOf(target));
 
-        if (!target.fainted() && move->type == "fire" && target.status == "frz") {
-            target.status.clear();
-            log_.push_back("|-curestatus|" + tag(defSide) + "|frz");
-        }
+            if (!target.fainted() && move->type == "fire" && target.status == "frz") {
+                target.status.clear();
+                log_.push_back("|-curestatus|" + tag(defSide) + "|frz");
+            }
 
-        checkFaint(defSide);
-        if (phase_ == Phase::Ended) return;
+            checkFaint(defSide);
+            if (phase_ == Phase::Ended) return;
+        }
+        totalDealt += dmg;
+        ++landed;
+    }
+    if (hits > 1) {
+        log_.push_back("|-hitcount|" + tag(defSide) + "|" + std::to_string(landed));
     }
 
     if (!target.fainted()) {
@@ -591,8 +604,8 @@ void Battle::executeMove(int atkSide, int moveIndex) {
         log_.push_back("|-damage|" + tag(atkSide) + "|" + hpOf(user) + "|[from] recoil");
         checkFaint(atkSide);
         if (phase_ != Phase::Ended && !user.fainted()) maybeEatBerry(atkSide);
-    } else if (move->recoilPercent > 0) {      // recoil off damage dealt
-        int recoil = std::max(1, dmg * move->recoilPercent / 100);
+    } else if (move->recoilPercent > 0) {      // recoil off total damage dealt
+        int recoil = std::max(1, totalDealt * move->recoilPercent / 100);
         user.hp = std::max(0, user.hp - recoil);
         log_.push_back("|-damage|" + tag(atkSide) + "|" + hpOf(user) + "|[from] recoil");
         checkFaint(atkSide);
@@ -622,6 +635,15 @@ void Battle::weatherDamage(int side) {
     p.hp = std::max(0, p.hp - dmg);
     log_.push_back("|-damage|" + tag(side) + "|" + hpOf(p) + "|[from] " + weather_);
     checkFaint(side);
+}
+
+int Battle::rollHitCount() {
+    // Publicly documented 2/3/4/5-hit weighting: 3/8, 3/8, 1/8, 1/8.
+    uint32_t r = rng_.next(8);
+    if (r < 3) return 2;
+    if (r < 6) return 3;
+    if (r < 7) return 4;
+    return 5;
 }
 
 void Battle::setHazard(int side, const std::string& hazard) {

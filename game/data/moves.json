@@ -246,5 +246,29 @@
     "priority": 0,
     "pp": 20,
     "hazard": "stealthrock"
+  },
+  "furyattack": {
+    "name": "Fury Attack",
+    "type": "normal",
+    "category": "physical",
+    "power": 15,
+    "accuracy": 85,
+    "priority": 0,
+    "pp": 20,
+    "contact": true,
+    "minHits": 2,
+    "maxHits": 5
+  },
+  "doubleslap": {
+    "name": "Double Slap",
+    "type": "normal",
+    "category": "physical",
+    "power": 15,
+    "accuracy": 85,
+    "priority": 0,
+    "pp": 10,
+    "contact": true,
+    "minHits": 2,
+    "maxHits": 2
   }
 }
