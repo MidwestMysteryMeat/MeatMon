@@ -369,6 +369,39 @@ int main(int argc, char** argv) {
         CHECK(b.side(0).monsters[0].hp < b.side(0).monsters[0].stats.hp);
     }
 
+    // --- entry hazards: spikes stack and damage a mon switching into them ------------
+    {
+        MonsterSet lead{.species = "emberling", .moves = {"growl"}};
+        lead.hp = 1;
+        MonsterSet backup{.species = "puddlit", .moves = {"growl"}};
+        Battle b(dex, Format{}, 80);
+        b.setPlayer(0, "A", {lead, backup});
+        b.setPlayer(1, "B", {{.species = "zapkin", .moves = {"spikes", "thundershock"}}});
+        b.start();
+        playTurns(b, 1, 0, 0);       // spikes goes up on p1's side
+        CHECK(logContains(b, "|-sidestart|p1|Spikes"));
+        playTurns(b, 2, 0, 1);       // thundershock faints the 1-HP lead -> auto-switch
+        CHECK(logContains(b, "|faint|p1a: Emberling"));
+        CHECK(logContains(b, "|-damage|p1a: Puddlit") && logContains(b, "[from] Spikes"));
+    }
+
+    // --- spikes caps at 3 layers; stealth rock sets a side flag once -----------------
+    {
+        Battle b = makeBattle(dex, 81,
+            {{.species = "emberling", .moves = {"growl"}}},
+            {{.species = "zapkin", .moves = {"spikes"}}});
+        playTurns(b, 4, 0, 0);
+        CHECK(b.side(0).spikesLayers == 3);
+    }
+    {
+        Battle b = makeBattle(dex, 82,
+            {{.species = "emberling", .moves = {"growl"}}},
+            {{.species = "zapkin", .moves = {"stealthrock"}}});
+        playTurns(b, 2, 0, 0);
+        CHECK(logContains(b, "|-sidestart|p1|Stealth Rock"));
+        CHECK(b.side(0).stealthRock);
+    }
+
     // --- struggle kicks in when PP runs dry, with recoil, and ends the battle -------
     {
         Battle b = makeBattle(dex, 314,

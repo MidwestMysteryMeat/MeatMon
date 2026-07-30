@@ -77,8 +77,10 @@ Runs in parallel with 1–2; `battle/` has no engine dependencies.
 - [x] Protect (priority move, blocks the foe's hit, lapses unless re-chosen
       each turn), healing moves (% of max HP), recoil-by-fraction (% of
       damage dealt, distinct from Struggle's flat 1/4 max HP)
-- [ ] Remaining move effect coverage (multi-hit, charge, switch moves,
-      hazards)
+- [x] Entry hazards: Spikes (1-3 layers, grounded only, 1/8-1/4 max HP) and
+      Stealth Rock (rock-type effectiveness, hits everyone); applied on
+      switch-in, can faint the incoming mon (forces another switch)
+- [ ] Remaining move effect coverage (multi-hit, charge, switch moves)
 - [ ] Doubles/Triples: multi-slot sides, targeting rules
 - [ ] Generation mechanics switch (1–9): per-gen formula/typechart tables;
       cartridge vs Showdown RNG call-order parity

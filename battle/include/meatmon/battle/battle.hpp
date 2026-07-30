@@ -59,6 +59,8 @@ struct Side {
     std::vector<MonsterSet> team;            // as submitted
     std::vector<BattleMonster> monsters;     // built at start()
     int active = -1;                         // index into monsters (singles)
+    int spikesLayers = 0;                    // entry hazard: 0-3
+    bool stealthRock = false;                // entry hazard
 
     bool hasReplacement() const;
 };
@@ -135,6 +137,8 @@ private:
     int effSpe(const BattleMonster& p) const;
     void setWeather(const std::string& w);   // field move: rain/sun/sandstorm/hail
     void weatherDamage(int side);            // sandstorm/hail chip damage
+    void setHazard(int side, const std::string& hazard);   // Spikes/Stealth Rock
+    void applyHazards(int side);             // damage on switch-in
 
     const Dex& dex_;
     Format format_;

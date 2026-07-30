@@ -151,6 +151,7 @@ void Battle::switchIn(int side, int index) {
     os << "|switch|" << tag(side) << "|" << p.species->name << ", L" << p.level
        << "|" << hpOf(p);
     log_.push_back(os.str());
+    applyHazards(side);
 }
 
 void Battle::beginTurn() {
@@ -238,7 +239,7 @@ bool Battle::choose(int side, Choice choice) {
         if (choice.index == s.active || s.monsters[choice.index].fainted()) return false;
         switchIn(side, choice.index);
         onSwitchInAbility(side);
-        needsSwitch_[side] = false;
+        needsSwitch_[side] = active(side).fainted();   // hazards may faint on entry
         if (!needsSwitch_[0] && !needsSwitch_[1]) beginTurn();
         return true;
     }
@@ -445,7 +446,7 @@ void Battle::executeMove(int atkSide, int moveIndex) {
 
     log_.push_back("|move|" + tag(atkSide) + "|" + move->name + "|" + tag(defSide));
 
-    if (!move->targetSelf && target.protecting) {
+    if (!move->targetSelf && move->hazard.empty() && target.protecting) {
         log_.push_back("|-activate|" + tag(defSide) + "|Protect");
         return;
     }
@@ -457,6 +458,10 @@ void Battle::executeMove(int atkSide, int moveIndex) {
     }
 
     if (move->category == MoveCategory::Status) {
+        if (!move->hazard.empty()) {
+            setHazard(defSide, move->hazard);
+            return;
+        }
         int tgt = move->targetSelf ? atkSide : defSide;
         if (tgt == defSide && target.substituteHp > 0) {
             log_.push_back("|-fail|" + tag(atkSide));
@@ -617,6 +622,55 @@ void Battle::weatherDamage(int side) {
     p.hp = std::max(0, p.hp - dmg);
     log_.push_back("|-damage|" + tag(side) + "|" + hpOf(p) + "|[from] " + weather_);
     checkFaint(side);
+}
+
+void Battle::setHazard(int side, const std::string& hazard) {
+    auto& s = sides_[side];
+    std::string sideTag = side == 0 ? "p1" : "p2";
+    if (hazard == "spikes") {
+        if (s.spikesLayers >= 3) {
+            log_.push_back("|-fail|" + sideTag);
+            return;
+        }
+        ++s.spikesLayers;
+        log_.push_back("|-sidestart|" + sideTag + "|Spikes");
+    } else if (hazard == "stealthrock") {
+        if (s.stealthRock) {
+            log_.push_back("|-fail|" + sideTag);
+            return;
+        }
+        s.stealthRock = true;
+        log_.push_back("|-sidestart|" + sideTag + "|Stealth Rock");
+    }
+}
+
+void Battle::applyHazards(int side) {
+    auto& p = active(side);
+    if (p.fainted()) return;
+    auto& s = sides_[side];
+
+    bool flying = std::find(p.species->types.begin(), p.species->types.end(), "flying") !=
+                  p.species->types.end();
+    bool levitates = false;
+    if (!p.ability.empty()) {
+        const Ability* ab = dex_.ability(p.ability);
+        levitates = ab && ab->immuneType == "ground";
+    }
+    if (s.spikesLayers > 0 && !flying && !levitates) {
+        int denom = s.spikesLayers == 1 ? 8 : s.spikesLayers == 2 ? 6 : 4;
+        int dmg = std::max(1, p.stats.hp / denom);
+        p.hp = std::max(0, p.hp - dmg);
+        log_.push_back("|-damage|" + tag(side) + "|" + hpOf(p) + "|[from] Spikes");
+        checkFaint(side);
+        if (p.fainted()) return;
+    }
+    if (s.stealthRock) {
+        double mult = dex_.effectiveness("rock", p.species->types);
+        int dmg = std::max(1, static_cast<int>(p.stats.hp * mult / 8));
+        p.hp = std::max(0, p.hp - dmg);
+        log_.push_back("|-damage|" + tag(side) + "|" + hpOf(p) + "|[from] Stealth Rock");
+        checkFaint(side);
+    }
 }
 
 void Battle::endOfTurn() {

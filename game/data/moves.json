@@ -226,5 +226,25 @@
     "pp": 15,
     "contact": true,
     "recoilPercent": 33
+  },
+  "spikes": {
+    "name": "Spikes",
+    "type": "ground",
+    "category": "status",
+    "power": 0,
+    "accuracy": -1,
+    "priority": 0,
+    "pp": 20,
+    "hazard": "spikes"
+  },
+  "stealthrock": {
+    "name": "Stealth Rock",
+    "type": "rock",
+    "category": "status",
+    "power": 0,
+    "accuracy": -1,
+    "priority": 0,
+    "pp": 20,
+    "hazard": "stealthrock"
   }
 }

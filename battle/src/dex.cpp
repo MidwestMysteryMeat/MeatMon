@@ -89,6 +89,7 @@ Dex Dex::load(const std::filesystem::path& dataDir) {
         mv.healPercent = v.value("healPercent", 0);
         mv.recoilPercent = v.value("recoilPercent", 0);
         mv.isProtect = v.value("protect", false);
+        mv.hazard = v.value("hazard", "");
         dex.moves_.emplace(id, std::move(mv));
     }
 
