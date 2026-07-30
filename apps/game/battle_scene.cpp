@@ -44,8 +44,14 @@ BattleScene::BattleScene(AssetManager& assets, SpriteLibrary& sprites,
 
 void BattleScene::start(uint64_t seed,
                         std::string playerName, std::vector<MonsterSet> playerTeam,
-                        std::string foeName, std::vector<MonsterSet> foeTeam) {
+                        std::string foeName, std::vector<MonsterSet> foeTeam,
+                        bool wild) {
     foeName_ = foeName;
+    wild_ = wild;
+    caught_ = false;
+    forceEnd_ = false;
+    if (wild && !foeTeam.empty()) wildTemplate_ = foeTeam[0];
+    catchRng_ = Prng(seed ^ 0xCA7C42ULL);
     battle_ = std::make_unique<Battle>(dex_, Format{}, seed);
     battle_->setPlayer(0, std::move(playerName), std::move(playerTeam));
     battle_->setPlayer(1, std::move(foeName), std::move(foeTeam));
@@ -93,9 +99,13 @@ void BattleScene::pushHuman(const std::string& line) {
         sawMove_ = true;
         msgs_.push_back(who(arg(2)) + " used " + arg(3) + "!");
     } else if (t == "switch") {
-        msgs_.push_back(arg(2).rfind("p1", 0) == 0
-                            ? "Go! " + who(arg(2)) + "!"
-                            : foeName_ + " sent out " + who(arg(2)).substr(4) + "!");
+        if (arg(2).rfind("p1", 0) == 0) {
+            msgs_.push_back("Go! " + who(arg(2)) + "!");
+        } else if (wild_) {
+            msgs_.push_back("A wild " + who(arg(2)).substr(4) + " appeared!");
+        } else {
+            msgs_.push_back(foeName_ + " sent out " + who(arg(2)).substr(4) + "!");
+        }
     } else if (t == "-damage") {
         std::string from = arg(4);
         if (from == "[from] brn") msgs_.push_back(who(arg(2)) + " is hurt by its burn!");
@@ -205,6 +215,36 @@ void BattleScene::submitSwitch(int listIdx) {
     }
 }
 
+void BattleScene::attemptCatch() {
+    const auto& wildMon = battle_->side(1).monsters[battle_->side(1).active];
+    msgs_.push_back("You threw a Meat Trap!");
+
+    // Classic-style catch value from HP fraction, species rate, and status.
+    int maxHp = wildMon.stats.hp;
+    int a = (3 * maxHp - 2 * wildMon.hp) * wildMon.species->catchRate / (3 * maxHp);
+    if (wildMon.status == "slp" || wildMon.status == "frz") a = a * 2;
+    else if (!wildMon.status.empty()) a = a * 3 / 2;
+    a = std::clamp(a, 1, 255);
+
+    if (static_cast<int>(catchRng_.next(255)) < a) {
+        msgs_.push_back("Gotcha! " + wildMon.name + " was caught!");
+        caught_ = true;
+        caughtSet_ = wildTemplate_;
+        caughtSet_.hp = wildMon.hp;
+        caughtSet_.status = wildMon.status;
+        forceEnd_ = true;
+        ui_ = Ui::Message;
+        return;
+    }
+
+    msgs_.push_back("Oh no! It broke free!");
+    // The throw costs the turn: pass, let the wild monster act.
+    battle_->choose(0, {ChoiceKind::Pass, 0});
+    autoChooseFoe();
+    tryCommit();
+    ui_ = Ui::Message;
+}
+
 void BattleScene::handleEvent(const SDL_Event& ev) {
     if (ev.type != SDL_EVENT_KEY_DOWN || ev.key.repeat || done_) return;
     SDL_Keycode k = ev.key.key;
@@ -219,10 +259,22 @@ void BattleScene::handleEvent(const SDL_Event& ev) {
     if (ui_ == Ui::MoveMenu) {
         int count = static_cast<int>(battle_->request(0).moves.size());
         if (count <= 0) return;
-        if (k == SDLK_LEFT || k == SDLK_RIGHT) sel_ ^= 1;
-        if (k == SDLK_UP || k == SDLK_DOWN) sel_ ^= 2;
-        sel_ = std::clamp(sel_, 0, count - 1);
-        if (confirm) submitMove(sel_);
+        int catchIdx = wild_ ? count : -1;      // extra "CATCH" entry
+        if (sel_ == catchIdx) {
+            if (k == SDLK_UP) sel_ = std::min(2, count - 1);
+        } else {
+            if (k == SDLK_LEFT || k == SDLK_RIGHT) sel_ ^= 1;
+            if (k == SDLK_UP) sel_ &= ~2;
+            if (k == SDLK_DOWN) {
+                if (sel_ < 2 && count > 2) sel_ |= 2;
+                else if (wild_) sel_ = catchIdx;
+            }
+            if (sel_ != catchIdx) sel_ = std::clamp(sel_, 0, count - 1);
+        }
+        if (confirm) {
+            if (sel_ == catchIdx) attemptCatch();
+            else submitMove(sel_);
+        }
     } else if (ui_ == Ui::SwitchMenu) {
         int count = static_cast<int>(battle_->request(0).switches.size());
         if (count <= 0) return;
@@ -249,7 +301,7 @@ void BattleScene::update() {
                 current_ = msgs_.front();
                 msgs_.pop_front();
                 msgTimer_ = 0;
-            } else if (battle_->ended()) {
+            } else if (battle_->ended() || forceEnd_) {
                 done_ = true;
             } else {
                 Request req = battle_->request(0);
@@ -327,6 +379,11 @@ void BattleScene::render(SDL_Renderer* r, const Font& font) {
             float y = 145 + (i / 2) * 15;
             if (i == sel_) font.draw(r, ">", x - 10, y, {255, 224, 96, 255});
             font.draw(r, name, x, y);
+        }
+        if (wild_) {
+            int catchIdx = static_cast<int>(req.moves.size());
+            if (sel_ == catchIdx) font.draw(r, ">", 14, 175, {255, 224, 96, 255});
+            font.draw(r, "CATCH", 24, 175, {120, 224, 160, 255});
         }
         if (sel_ < static_cast<int>(req.moves.size())) {
             const auto& slot = req.moves[sel_];

@@ -21,8 +21,8 @@ function global:B([int]$r, [int]$g2, [int]$b) {
     New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, $r, $g2, $b))
 }
 
-# --- tileset: 4 tiles in a row, 16x16 each: grass, path, water, tree --------
-New-Png 64 16 "game/assets/tilesets/overworld.png" {
+# --- tileset: 5 tiles in a row, 16x16 each: grass, path, water, tree, tall grass
+New-Png 80 16 "game/assets/tilesets/overworld.png" {
     param($g, $bmp)
     # 1: grass
     $g.FillRectangle((B 52 128 66), 0, 0, 16, 16)
@@ -43,6 +43,12 @@ New-Png 64 16 "game/assets/tilesets/overworld.png" {
     $g.FillRectangle((B 92 64 40), 54, 10, 4, 5)
     $g.FillEllipse((B 30 84 44), 49, 0, 14, 12)
     $g.FillEllipse((B 44 108 56), 51, 2, 8, 6)
+    # 5: tall grass (encounter tile: base grass + dark blades)
+    $g.FillRectangle((B 52 128 66), 64, 0, 16, 16)
+    foreach ($bx in @(65, 68, 71, 74, 77)) {
+        $g.FillRectangle((B 28 92 44), $bx, 4, 2, 11)
+        $g.FillRectangle((B 36 104 52), ($bx + 1), 2, 1, 13)
+    }
 }
 
 # --- creature placeholders ----------------------------------------------------

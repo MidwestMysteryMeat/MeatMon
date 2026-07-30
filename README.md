@@ -55,6 +55,9 @@ editor — see docs/EDITOR.md), Esc quits.
 
 ## License
 
-Private, proprietary. All rights reserved. No Pokémon assets or Pokémon
-Showdown source are included or copied; see the clean-room policy in
-ARCHITECTURE.md.
+Licensed under the **[Apache License 2.0](LICENSE)** — free to use, modify, fork and build on, commercially or not.
+
+**Credit is required.** Apache-2.0 §4(c)–(d) obliges you to keep the copyright notice and to reproduce [`NOTICE`](NOTICE) in anything you distribute, including binaries and hosted builds. Credit it as `MeatMon Engine by MysteryMeat` (https://github.com/MidwestMysteryMeat/MeatMon) in your credits screen, About box, or docs. The project name and the MysteryMeat name are not licensed for endorsement or promotion (§6).
+
+No Pokémon assets or Pokémon Showdown source are included or copied; see the
+clean-room policy in ARCHITECTURE.md.

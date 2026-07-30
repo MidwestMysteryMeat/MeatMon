@@ -205,7 +205,13 @@ Request Battle::request(int side) const {
 
 bool Battle::choose(int side, Choice choice) {
     if (phase_ == Phase::Choices) {
-        if (choice.kind != ChoiceKind::Move || !pending_[side]) return false;
+        if (!pending_[side]) return false;
+        if (choice.kind == ChoiceKind::Pass) {
+            choices_[side] = choice;
+            pending_[side] = false;
+            return true;
+        }
+        if (choice.kind != ChoiceKind::Move) return false;
         const auto& mons = active(side).moves;
         bool anyPP = false;
         for (const auto& m : mons) anyPP |= m.pp > 0;
@@ -256,6 +262,7 @@ void Battle::commitTurn() {
     };
     std::vector<Action> actions;
     for (int s = 0; s < 2; ++s) {
+        if (choices_[s].kind == ChoiceKind::Pass) continue;
         int idx = choices_[s].index;
         const Move* mv = idx >= 0 ? dex_.move(active(s).moves[idx].id) : &kStruggle;
         actions.push_back({s, idx, mv ? mv->priority : 0, effSpe(active(s)), rng_.next32()});

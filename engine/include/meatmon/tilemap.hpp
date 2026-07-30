@@ -21,6 +21,14 @@ struct MapEntity {
     nlohmann::json extra;                  // the full original JSON object
 };
 
+// A tile-triggered map connection: stepping onto (x, y) moves the player to
+// (tx, ty) on `map`.
+struct Warp {
+    int x = 0, y = 0;
+    std::string map;
+    int tx = 0, ty = 0;
+};
+
 // JSON tilemap. Layers are row-major tile indices into a single-row tileset
 // image; 0 = empty, 1 = first tile. "collision" is 0/1.
 struct Tilemap {
@@ -28,7 +36,9 @@ struct Tilemap {
     std::string tilesetPath;               // relative to assets root
     std::vector<int> ground, objects, collision;
     std::vector<MapEntity> entities;
+    std::vector<Warp> warpList;            // parsed view of `warps`
     nlohmann::json warps, events;          // preserved verbatim on save
+    nlohmann::json encounters;             // wild tables (game interprets)
 
     static bool load(const std::filesystem::path& file, Tilemap& out);
     bool save(const std::filesystem::path& file) const;   // editor round-trip

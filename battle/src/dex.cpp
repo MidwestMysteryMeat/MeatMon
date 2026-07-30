@@ -56,6 +56,7 @@ Dex Dex::load(const std::filesystem::path& dataDir) {
         sp.num = v.value("num", 0);
         sp.types = v.value("types", std::vector<std::string>{});
         sp.baseStats = parseStats(v.at("baseStats"));
+        sp.catchRate = v.value("catchRate", 128);
         dex.species_.emplace(id, std::move(sp));
     }
 

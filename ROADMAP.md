@@ -19,7 +19,9 @@ competitive battles?* If no, it doesn't get a phase.
 ## Phase 1 — Core 2D solidified
 
 - [ ] Grid movement polish: facing, run/walk speeds, 4-dir character sheets
-- [ ] Camera (follow, map-edge clamp), multi-map loading, warps between maps
+- [ ] Camera (follow, map-edge clamp)
+- [x] Multi-map loading, warps between maps (tile-triggered, save carries the
+      current map name)
 - [x] Entity set v1: NPC + Trainer from map JSON (`entities` array — sprite,
       facing, blocking, dialogue, authored teams); engine parses common
       fields, game-specific fields ride in `extra`
@@ -39,12 +41,15 @@ competitive battles?* If no, it doesn't get a phase.
 - [x] Dialogue box v1: speaker + wrapped lines from entity data, Z advances,
       trainer intro/defeated variants, flows into battles
 - [ ] Dialogue v2: choices + conditionals (flag/var checks), typewriter text
-- [ ] Encounters: grass/cave tables per map (species, levels, rates)
+- [x] Encounters: per-map tile-triggered tables (species/level range/weight/
+      moves, encounter rate), weighted roll into a wild battle
 - [ ] Inventory/bag, party management UI, PC storage boxes, Pokédex flags
 - [x] Battle transition + battle scene v1 (pure view over the protocol log):
       animated HP bars, move menu driven by `Request`, faint-switch menu,
       humanized message box, sprite slots via `SpriteLibrary`, flee (Esc)
-- [ ] Battle scene v2: attack/faint animations, exp bar, catch flow
+- [x] Catch flow: wild-only CATCH menu entry, classic catch-value formula off
+      species `catchRate` + HP fraction + status, caught mon joins the party
+- [ ] Battle scene v2: attack/faint animations, exp bar
 - [x] Trainer battles from entity data (talk to fight, defeat remembered for
       the session, `teamFromJson` shared with saves/network)
 - [ ] Trainer polish: line-of-sight engagement, reward money, rematch rules

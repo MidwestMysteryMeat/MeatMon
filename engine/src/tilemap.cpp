@@ -41,6 +41,17 @@ bool Tilemap::load(const std::filesystem::path& file, Tilemap& out) {
 
     m.warps = j.value("warps", json::array());
     m.events = j.value("events", json::array());
+    m.encounters = j.value("encounters", json::object());
+    for (const auto& w : m.warps) {
+        if (!w.is_object()) continue;
+        Warp warp;
+        warp.x = w.value("x", 0);
+        warp.y = w.value("y", 0);
+        warp.map = w.value("map", "");
+        warp.tx = w.value("tx", 0);
+        warp.ty = w.value("ty", 0);
+        m.warpList.push_back(std::move(warp));
+    }
 
     if (j.contains("entities") && j["entities"].is_array()) {
         for (const auto& e : j["entities"]) {
@@ -83,6 +94,7 @@ bool Tilemap::save(const std::filesystem::path& file) const {
     j["layers"]["collision"] = layerRows(collision);
     j["warps"] = warps;
     j["events"] = events;
+    j["encounters"] = encounters;
 
     json ents = json::array();
     for (const auto& e : entities) {

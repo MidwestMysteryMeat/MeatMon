@@ -21,9 +21,11 @@ public:
     BattleScene(mm::AssetManager& assets, mm::SpriteLibrary& sprites,
                 const mm::battle::Dex& dex, bool autoplay = false);
 
+    // wild = true enables the catch option; foeTeam[0] is the wild monster.
     void start(uint64_t seed,
                std::string playerName, std::vector<mm::battle::MonsterSet> playerTeam,
-               std::string foeName, std::vector<mm::battle::MonsterSet> foeTeam);
+               std::string foeName, std::vector<mm::battle::MonsterSet> foeTeam,
+               bool wild = false);
     void handleEvent(const SDL_Event& ev);
     void update();
     void render(SDL_Renderer* r, const mm::Font& font);
@@ -31,6 +33,8 @@ public:
     bool finished() const { return done_; }
     bool playerWon() const { return battle_ && battle_->winner() == 0; }
     const mm::battle::Battle* battle() const { return battle_.get(); }
+    bool caught() const { return caught_; }
+    const mm::battle::MonsterSet& caughtSet() const { return caughtSet_; }
     bool sawMove() const { return sawMove_; }   // selftest probe
 
 private:
@@ -43,6 +47,7 @@ private:
     void tryCommit();
     void submitMove(int idx);
     void submitSwitch(int listIdx);
+    void attemptCatch();
 
     struct Slot {
         std::string name;
@@ -67,5 +72,11 @@ private:
     bool done_ = false;
     bool sawMove_ = false;
     std::string foeName_ = "Foe";
+    bool wild_ = false;
+    bool caught_ = false;
+    bool forceEnd_ = false;                     // catch success ends the fight
+    mm::battle::MonsterSet wildTemplate_;
+    mm::battle::MonsterSet caughtSet_;
+    mm::battle::Prng catchRng_{1};              // app-side RNG, not the sim's
     Slot slots_[2];                             // 0 = player, 1 = foe
 };

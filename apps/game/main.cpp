@@ -12,6 +12,7 @@
 #include <meatmon/sprites.hpp>
 #include <meatmon/tilemap.hpp>
 #include <meatmon/battle/battle.hpp>
+#include <meatmon/battle/rng.hpp>
 #include <meatmon/battle/team.hpp>
 
 #include <SDL3/SDL_main.h>
@@ -342,19 +343,26 @@ private:
 
     void beginTrainerBattle(const MapEntity& trainer) {
         pendingTrainer_ = trainer;
+        pendingWild_ = false;
         mode_ = Mode::ToBattle;
         transitionT_ = 0;
     }
 
     void startPendingBattle() {
+        battleScene_ = std::make_unique<BattleScene>(*assets_, *spriteLib_, *dex_,
+                                                     selftest_);
+        if (pendingWild_) {
+            battleScene_->start(0x5EED0000ULL + ticks_, playerName_, playerTeam_,
+                                "Wild", {wildMon_}, /*wild=*/true);
+            mode_ = Mode::Battle;
+            return;
+        }
         auto foeTeam = battle::teamFromJson(pendingTrainer_.extra["team"]);
         if (foeTeam.empty()) {
             SDL_Log("trainer %s has no team", pendingTrainer_.id.c_str());
             mode_ = Mode::Overworld;
             return;
         }
-        battleScene_ = std::make_unique<BattleScene>(*assets_, *spriteLib_, *dex_,
-                                                     selftest_);
         battleScene_->start(0x5EED0000ULL + ticks_, playerName_, playerTeam_,
                             pendingTrainer_.extra.value("name", "Trainer"), foeTeam);
         mode_ = Mode::Battle;
@@ -371,7 +379,11 @@ private:
         if (battleScene_->playerWon() && !pendingTrainer_.id.empty()) {
             defeated_.insert(pendingTrainer_.id);
         }
+        if (battleScene_->caught() && playerTeam_.size() < 6) {
+            playerTeam_.push_back(battleScene_->caughtSet());
+        }
         pendingTrainer_ = MapEntity{};
+        pendingWild_ = false;
         battleScene_.reset();
         if (!partyAlive()) {
             healParty();
@@ -388,7 +400,7 @@ private:
     void saveGame() {
         nlohmann::json j;
         j["save_version"] = 1;
-        j["map"] = "demo";
+        j["map"] = mapName_;
         j["player"] = {{"x", player_.tx}, {"y", player_.ty},
                        {"fdx", player_.fdx}, {"fdy", player_.fdy}};
         j["playtime_ticks"] = playtimeBase_ + ticks_;
@@ -410,6 +422,19 @@ private:
         if (!f) return false;
         auto j = nlohmann::json::parse(f, nullptr, false);
         if (j.is_discarded() || j.value("save_version", 0) != 1) return false;
+        std::string savedMap = j.value("map", mapName_);
+        if (savedMap != mapName_) {
+            std::filesystem::path path = gameDir_ / "maps" / (savedMap + ".json");
+            Tilemap fresh;
+            if (Tilemap::load(path, fresh)) {
+                map_ = std::move(fresh);
+                mapPath_ = path;
+                std::error_code mec;
+                mapMtime_ = std::filesystem::last_write_time(mapPath_, mec);
+                tileset_ = assets_->texture(map_.tilesetPath);
+                mapName_ = savedMap;
+            }
+        }
         player_.tx = player_.ttx = j["player"].value("x", 3);
         player_.ty = player_.tty = j["player"].value("y", 3);
         player_.fdx = j["player"].value("fdx", 0);
@@ -436,7 +461,14 @@ private:
         p.prevY = p.curY;
         const float ts = static_cast<float>(map_.tileSize);
 
-        if (p.t >= 1.f) {
+        if (p.t < 1.f) {
+            p.t = std::min(1.f, p.t + static_cast<float>(dt) * 5.f);  // 5 tiles/s
+            if (p.t >= 1.f) {
+                p.tx = p.ttx;
+                p.ty = p.tty;
+                onArriveTile();       // may load a new map or start a battle
+            }
+        } else {
             p.tx = p.ttx;
             p.ty = p.tty;
             const bool* keys = SDL_GetKeyboardState(nullptr);
@@ -455,13 +487,91 @@ private:
                     p.t = 0.f;
                 }
             }
-        } else {
-            p.t = std::min(1.f, p.t + static_cast<float>(dt) * 5.f);  // 5 tiles/s
         }
 
         float u = std::min(p.t, 1.f);
         p.curX = ((1 - u) * p.tx + u * p.ttx) * ts;
         p.curY = ((1 - u) * p.ty + u * p.tty) * ts;
+    }
+
+    // Fires once, the frame the player's step lands on a new tile: map warps
+    // take priority over wild encounters (can't roll for grass mid-warp).
+    void onArriveTile() {
+        for (const auto& w : map_.warpList) {
+            if (w.x == player_.tx && w.y == player_.ty) {
+                loadMap(w.map, w.tx, w.ty);
+                return;
+            }
+        }
+        tryWildEncounter();
+    }
+
+    void loadMap(const std::string& name, int tx, int ty) {
+        std::filesystem::path path = gameDir_ / "maps" / (name + ".json");
+        Tilemap fresh;
+        if (!Tilemap::load(path, fresh)) {
+            SDL_Log("failed to load map %s", path.string().c_str());
+            return;
+        }
+        map_ = std::move(fresh);
+        mapPath_ = path;
+        std::error_code ec;
+        mapMtime_ = std::filesystem::last_write_time(mapPath_, ec);
+        tileset_ = assets_->texture(map_.tilesetPath);
+        mapName_ = name;
+
+        player_.tx = player_.ttx = tx;
+        player_.ty = player_.tty = ty;
+        player_.t = 1.f;
+        const float ts = static_cast<float>(map_.tileSize);
+        player_.curX = player_.prevX = tx * ts;
+        player_.curY = player_.prevY = ty * ts;
+    }
+
+    int groundTileAt(int tx, int ty) const {
+        if (tx < 0 || ty < 0 || tx >= map_.width || ty >= map_.height) return 0;
+        return map_.ground[static_cast<size_t>(ty) * map_.width + tx];
+    }
+
+    // `encounters`: { "tiles": [id...], "rate": 0..256, "table": [
+    //   { "species", "min", "max", "weight", "moves": [...] }, ... ] }
+    void tryWildEncounter() {
+        if (!map_.encounters.is_object() || map_.encounters.empty()) return;
+        auto tiles = map_.encounters.value("tiles", std::vector<int>{});
+        int tileId = groundTileAt(player_.tx, player_.ty);
+        if (std::find(tiles.begin(), tiles.end(), tileId) == tiles.end()) return;
+
+        int rate = map_.encounters.value("rate", 0);   // out of 256
+        if (rate <= 0 || encounterRng_.next(256) >= static_cast<uint32_t>(rate)) return;
+
+        auto table = map_.encounters.value("table", nlohmann::json::array());
+        int totalWeight = 0;
+        for (const auto& e : table) totalWeight += e.value("weight", 1);
+        if (totalWeight <= 0) return;
+
+        int roll = static_cast<int>(encounterRng_.next(static_cast<uint32_t>(totalWeight)));
+        for (const auto& e : table) {
+            int w = e.value("weight", 1);
+            if (roll < w) {
+                beginWildEncounter(e);
+                return;
+            }
+            roll -= w;
+        }
+    }
+
+    void beginWildEncounter(const nlohmann::json& entry) {
+        int lo = entry.value("min", 5), hi = entry.value("max", lo);
+        wildMon_ = battle::MonsterSet{};
+        wildMon_.species = entry.value("species", "");
+        wildMon_.level = encounterRng_.range(lo, hi + 1);
+        wildMon_.moves = entry.value("moves", std::vector<std::string>{});
+        if (wildMon_.species.empty() || wildMon_.moves.empty()) return;
+
+        pendingWild_ = true;
+        pendingTrainer_ = MapEntity{};
+        mode_ = Mode::ToBattle;
+        transitionT_ = 0;
     }
 
     void pollMapReload() {
@@ -485,6 +595,7 @@ private:
     std::unique_ptr<AssetManager> assets_;
     std::unique_ptr<SpriteLibrary> spriteLib_;
     Tilemap map_;
+    std::string mapName_ = "demo";
     std::filesystem::path mapPath_;
     std::filesystem::file_time_type mapMtime_;
     Texture* tileset_ = nullptr;
@@ -508,6 +619,10 @@ private:
     bool pendingHeal_ = false;
     std::set<std::string> defeated_;            // persisted in save.json
     uint64_t playtimeBase_ = 0;
+
+    bool pendingWild_ = false;
+    battle::MonsterSet wildMon_;
+    battle::Prng encounterRng_{0x6E1C0053ULL};
 
     uint64_t ticks_ = 0;
 };

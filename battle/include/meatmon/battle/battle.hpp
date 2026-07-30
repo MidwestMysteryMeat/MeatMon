@@ -61,7 +61,8 @@ struct Side {
     bool hasReplacement() const;
 };
 
-enum class ChoiceKind { Move, Switch };
+enum class ChoiceKind { Move, Switch, Pass };   // Pass = forfeit the turn
+                                                // (item use, catch attempts)
 
 struct Choice {
     ChoiceKind kind = ChoiceKind::Move;

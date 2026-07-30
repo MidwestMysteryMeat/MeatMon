@@ -19,6 +19,7 @@ struct Species {
     int num = 0;                     // dex/sprite number (PokeAPI-style key)
     std::vector<std::string> types;  // 1-2 type ids
     StatTable baseStats;
+    int catchRate = 128;             // 1..255, higher = easier to catch
 };
 
 struct Move {
