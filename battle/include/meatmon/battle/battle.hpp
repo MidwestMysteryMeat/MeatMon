@@ -33,6 +33,10 @@ struct BattlePokemon {
     StatTable stats{};
     int hp = 0;
     std::vector<MoveSlot> moves;
+    std::string status;              // "", brn, par, psn, tox, slp, frz
+    int sleepTurns = 0;              // remaining slp turns
+    int toxicN = 0;                  // tox residual counter (resets on switch)
+    StatTable boosts{};              // stat stages -6..+6 (hp unused)
 
     bool fainted() const { return hp <= 0; }
 };
@@ -51,6 +55,8 @@ enum class ChoiceKind { Move, Switch };
 struct Choice {
     ChoiceKind kind = ChoiceKind::Move;
     int index = 0;                           // move slot / party index
+                                             // (index -1 = Struggle, set by
+                                             // the sim when no PP remains)
 };
 
 // What a side may legally do right now. Mirrors the shape of Showdown's
@@ -100,8 +106,14 @@ private:
     std::string tag(int side) const;         // "p1a: Nickname"
     void switchIn(int side, int index);
     void beginTurn();
-    void executeMove(int side, int moveIndex);
+    void executeMove(int side, int moveIndex);   // moveIndex -1 = Struggle
     void checkFaint(int defSide);
+    bool beforeMove(int side);               // slp/frz/par gates, logs |cant|
+    void applyStatus(int targetSide, const std::string& status);
+    void applyBoosts(int targetSide,
+                     const std::vector<std::pair<std::string, int>>& boosts);
+    void endOfTurn();                        // residual brn/psn/tox damage
+    int effSpe(const BattlePokemon& p) const;
 
     const Dex& dex_;
     Format format_;

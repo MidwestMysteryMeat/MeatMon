@@ -1,4 +1,5 @@
 #include "meatmon/battle/battle.hpp"
+#include "meatmon/battle/calc.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -10,23 +11,42 @@ namespace mm::battle {
 
 namespace {
 
-// Standard published stat formulas (integer math throughout).
-int hpStat(int base, int iv, int ev, int level) {
-    return (2 * base + iv + ev / 4) * level / 100 + level + 10;
-}
-
-// natureNum: 110 boosted, 90 hindered, 100 neutral.
-int otherStat(int base, int iv, int ev, int level, int natureNum) {
-    int s = (2 * base + iv + ev / 4) * level / 100 + 5;
-    return s * natureNum / 100;
-}
-
 int natureNum(const Nature* n, const char* key) {
     if (!n) return 100;
     if (n->plus == key) return 110;
     if (n->minus == key) return 90;
     return 100;
 }
+
+int* boostField(StatTable& b, const std::string& key) {
+    if (key == "atk") return &b.atk;
+    if (key == "def") return &b.def;
+    if (key == "spa") return &b.spa;
+    if (key == "spd") return &b.spd;
+    if (key == "spe") return &b.spe;
+    return nullptr;
+}
+
+// "hp/max" plus the status suffix Showdown-style hp strings carry.
+std::string hpOf(const BattlePokemon& p) {
+    std::string s = std::to_string(p.hp) + "/" + std::to_string(p.stats.hp);
+    if (!p.status.empty() && !p.fainted()) s += " " + p.status;
+    return s;
+}
+
+// Struggle: typeless 50 BP physical, never misses, bypasses PP; recoil is
+// handled in executeMove. Used automatically when a side has no PP left.
+const Move kStruggle = [] {
+    Move m;
+    m.id = "struggle";
+    m.name = "Struggle";
+    m.type = "???";                 // absent from the chart => 1x vs everything
+    m.category = MoveCategory::Physical;
+    m.basePower = 50;
+    m.accuracy = -1;
+    m.pp = 1;
+    return m;
+}();
 
 } // namespace
 
@@ -59,12 +79,12 @@ void Battle::start() {
             p.species = sp;
             p.name = set.name.empty() ? sp->name : set.name;
             p.level = set.level;
-            p.stats.hp  = hpStat(sp->baseStats.hp, set.ivs.hp, set.evs.hp, set.level);
-            p.stats.atk = otherStat(sp->baseStats.atk, set.ivs.atk, set.evs.atk, set.level, natureNum(nat, "atk"));
-            p.stats.def = otherStat(sp->baseStats.def, set.ivs.def, set.evs.def, set.level, natureNum(nat, "def"));
-            p.stats.spa = otherStat(sp->baseStats.spa, set.ivs.spa, set.evs.spa, set.level, natureNum(nat, "spa"));
-            p.stats.spd = otherStat(sp->baseStats.spd, set.ivs.spd, set.evs.spd, set.level, natureNum(nat, "spd"));
-            p.stats.spe = otherStat(sp->baseStats.spe, set.ivs.spe, set.evs.spe, set.level, natureNum(nat, "spe"));
+            p.stats.hp  = calc::hpStat(sp->baseStats.hp, set.ivs.hp, set.evs.hp, set.level);
+            p.stats.atk = calc::otherStat(sp->baseStats.atk, set.ivs.atk, set.evs.atk, set.level, natureNum(nat, "atk"));
+            p.stats.def = calc::otherStat(sp->baseStats.def, set.ivs.def, set.evs.def, set.level, natureNum(nat, "def"));
+            p.stats.spa = calc::otherStat(sp->baseStats.spa, set.ivs.spa, set.evs.spa, set.level, natureNum(nat, "spa"));
+            p.stats.spd = calc::otherStat(sp->baseStats.spd, set.ivs.spd, set.evs.spd, set.level, natureNum(nat, "spd"));
+            p.stats.spe = calc::otherStat(sp->baseStats.spe, set.ivs.spe, set.evs.spe, set.level, natureNum(nat, "spe"));
             p.hp = p.stats.hp;
 
             for (const auto& mid : set.moves) {
@@ -101,10 +121,12 @@ std::string Battle::tag(int side) const {
 
 void Battle::switchIn(int side, int index) {
     sides_[side].active = index;
-    const auto& p = active(side);
+    auto& p = active(side);
+    p.boosts = {};          // stages don't persist through a switch
+    p.toxicN = 0;           // tox residual counter resets
     std::ostringstream os;
     os << "|switch|" << tag(side) << "|" << p.species->name << ", L" << p.level
-       << "|" << p.hp << "/" << p.stats.hp;
+       << "|" << hpOf(p);
     log_.push_back(os.str());
 }
 
@@ -121,6 +143,9 @@ Request Battle::request(int side) const {
     if (phase_ == Phase::Choices && pending_[side]) {
         req.kind = Request::Kind::Move;
         req.moves = active(side).moves;
+        bool anyPP = false;
+        for (const auto& m : req.moves) anyPP |= m.pp > 0;
+        if (!anyPP) req.moves = {MoveSlot{"struggle", 1, 1}};
     } else if (phase_ == Phase::FaintSwitch && needsSwitch_[side]) {
         req.kind = Request::Kind::Switch;
         const auto& s = sides_[side];
@@ -135,8 +160,15 @@ bool Battle::choose(int side, Choice choice) {
     if (phase_ == Phase::Choices) {
         if (choice.kind != ChoiceKind::Move || !pending_[side]) return false;
         const auto& mons = active(side).moves;
+        bool anyPP = false;
+        for (const auto& m : mons) anyPP |= m.pp > 0;
+        if (!anyPP) {
+            choices_[side] = {ChoiceKind::Move, -1};   // Struggle
+            pending_[side] = false;
+            return true;
+        }
         if (choice.index < 0 || choice.index >= static_cast<int>(mons.size())) return false;
-        if (mons[choice.index].pp <= 0) return false;   // Struggle is Phase 3
+        if (mons[choice.index].pp <= 0) return false;
         choices_[side] = choice;
         pending_[side] = false;
         return true;
@@ -158,6 +190,12 @@ bool Battle::allChoicesIn() const {
     return phase_ == Phase::Choices && !pending_[0] && !pending_[1];
 }
 
+int Battle::effSpe(const BattlePokemon& p) const {
+    int s = calc::applyStage(p.stats.spe, p.boosts.spe);
+    if (p.status == "par") s /= 2;
+    return s;
+}
+
 void Battle::commitTurn() {
     if (!allChoicesIn()) return;
 
@@ -170,9 +208,9 @@ void Battle::commitTurn() {
     };
     std::vector<Action> actions;
     for (int s = 0; s < 2; ++s) {
-        const Move* mv = dex_.move(active(s).moves[choices_[s].index].id);
-        actions.push_back({s, choices_[s].index, mv ? mv->priority : 0,
-                           active(s).stats.spe, rng_.next32()});
+        int idx = choices_[s].index;
+        const Move* mv = idx >= 0 ? dex_.move(active(s).moves[idx].id) : &kStruggle;
+        actions.push_back({s, idx, mv ? mv->priority : 0, effSpe(active(s)), rng_.next32()});
     }
     std::sort(actions.begin(), actions.end(), [](const Action& a, const Action& b) {
         if (a.prio != b.prio) return a.prio > b.prio;
@@ -186,6 +224,8 @@ void Battle::commitTurn() {
     }
 
     if (phase_ == Phase::Ended) return;
+    endOfTurn();
+    if (phase_ == Phase::Ended) return;
     if (needsSwitch_[0] || needsSwitch_[1]) {
         phase_ = Phase::FaintSwitch;
         return;
@@ -193,18 +233,99 @@ void Battle::commitTurn() {
     beginTurn();
 }
 
+bool Battle::beforeMove(int side) {
+    auto& u = active(side);
+    if (u.status == "slp") {
+        if (--u.sleepTurns <= 0) {
+            u.status.clear();
+            log_.push_back("|-curestatus|" + tag(side) + "|slp");
+        } else {
+            log_.push_back("|cant|" + tag(side) + "|slp");
+            return false;
+        }
+    }
+    if (u.status == "frz") {
+        if (rng_.chance(20, 100)) {
+            u.status.clear();
+            log_.push_back("|-curestatus|" + tag(side) + "|frz");
+        } else {
+            log_.push_back("|cant|" + tag(side) + "|frz");
+            return false;
+        }
+    }
+    if (u.status == "par" && rng_.chance(25, 100)) {
+        log_.push_back("|cant|" + tag(side) + "|par");
+        return false;
+    }
+    return true;
+}
+
+void Battle::applyStatus(int targetSide, const std::string& status) {
+    auto& t = active(targetSide);
+    if (t.fainted()) return;
+    auto hasType = [&](const char* ty) {
+        return std::find(t.species->types.begin(), t.species->types.end(), ty) !=
+               t.species->types.end();
+    };
+    bool immune =
+        (status == "brn" && hasType("fire")) ||
+        (status == "par" && hasType("electric")) ||
+        ((status == "psn" || status == "tox") && (hasType("poison") || hasType("steel"))) ||
+        (status == "frz" && hasType("ice"));
+    if (immune) {
+        log_.push_back("|-immune|" + tag(targetSide));
+        return;
+    }
+    if (!t.status.empty()) {
+        log_.push_back("|-fail|" + tag(targetSide));
+        return;
+    }
+    t.status = status;
+    if (status == "slp") t.sleepTurns = 1 + static_cast<int>(rng_.next(3));
+    if (status == "tox") t.toxicN = 0;
+    log_.push_back("|-status|" + tag(targetSide) + "|" + status);
+}
+
+void Battle::applyBoosts(int targetSide,
+                         const std::vector<std::pair<std::string, int>>& boosts) {
+    auto& t = active(targetSide);
+    if (t.fainted()) return;
+    for (const auto& [stat, delta] : boosts) {
+        int* b = boostField(t.boosts, stat);
+        if (!b) continue;
+        int before = *b;
+        *b = std::clamp(before + delta, -6, 6);
+        int applied = *b - before;
+        if (applied > 0) {
+            log_.push_back("|-boost|" + tag(targetSide) + "|" + stat + "|" +
+                           std::to_string(applied));
+        } else if (applied < 0) {
+            log_.push_back("|-unboost|" + tag(targetSide) + "|" + stat + "|" +
+                           std::to_string(-applied));
+        } else {
+            log_.push_back("|-fail|" + tag(targetSide));
+        }
+    }
+}
+
 void Battle::executeMove(int atkSide, int moveIndex) {
     auto& user = active(atkSide);
     if (user.fainted()) return;
-
     int defSide = 1 - atkSide;
     auto& target = active(defSide);
     if (target.fainted()) return;
 
-    auto& slot = user.moves[moveIndex];
-    const Move* move = dex_.move(slot.id);
-    if (!move) return;
-    if (slot.pp > 0) --slot.pp;
+    if (!beforeMove(atkSide)) return;
+
+    const Move* move = nullptr;
+    if (moveIndex < 0) {
+        move = &kStruggle;
+    } else {
+        auto& slot = user.moves[moveIndex];
+        move = dex_.move(slot.id);
+        if (!move) return;
+        if (slot.pp > 0) --slot.pp;
+    }
 
     log_.push_back("|move|" + tag(atkSide) + "|" + move->name + "|" + tag(defSide));
 
@@ -214,8 +335,10 @@ void Battle::executeMove(int atkSide, int moveIndex) {
         return;
     }
 
-    if (move->category == MoveCategory::Status || move->basePower <= 0) {
-        // Status effects land in Phase 3; the scaffold logs the move only.
+    if (move->category == MoveCategory::Status) {
+        int tgt = move->targetSelf ? atkSide : defSide;
+        if (!move->boosts.empty()) applyBoosts(tgt, move->boosts);
+        if (!move->status.empty()) applyStatus(tgt, move->status);
         return;
     }
 
@@ -227,8 +350,10 @@ void Battle::executeMove(int atkSide, int moveIndex) {
 
     bool crit = rng_.chance(1, 24);
     bool physical = move->category == MoveCategory::Physical;
-    int atkStat = physical ? user.stats.atk : user.stats.spa;
-    int defStat = physical ? target.stats.def : target.stats.spd;
+    int atkStat = physical ? calc::applyStage(user.stats.atk, user.boosts.atk)
+                           : calc::applyStage(user.stats.spa, user.boosts.spa);
+    int defStat = physical ? calc::applyStage(target.stats.def, target.boosts.def)
+                           : calc::applyStage(target.stats.spd, target.boosts.spd);
 
     // Published damage formula, integer chain matching game behaviour.
     int dmg = ((2 * user.level / 5 + 2) * move->basePower * atkStat / defStat) / 50 + 2;
@@ -238,6 +363,7 @@ void Battle::executeMove(int atkSide, int moveIndex) {
                           move->type) != user.species->types.end();
     if (stab) dmg = dmg * 3 / 2;
     dmg = static_cast<int>(dmg * typeMult);
+    if (physical && user.status == "brn") dmg /= 2;   // burn: 0.5x physical
     if (dmg < 1) dmg = 1;
 
     if (crit) log_.push_back("|-crit|" + tag(defSide));
@@ -245,13 +371,63 @@ void Battle::executeMove(int atkSide, int moveIndex) {
     else if (typeMult < 1.0) log_.push_back("|-resisted|" + tag(defSide));
 
     target.hp = std::max(0, target.hp - dmg);
-    log_.push_back("|-damage|" + tag(defSide) + "|" + std::to_string(target.hp) +
-                   "/" + std::to_string(target.stats.hp));
+    log_.push_back("|-damage|" + tag(defSide) + "|" + hpOf(target));
+
+    if (!target.fainted() && move->type == "fire" && target.status == "frz") {
+        target.status.clear();
+        log_.push_back("|-curestatus|" + tag(defSide) + "|frz");
+    }
+
     checkFaint(defSide);
+    if (phase_ == Phase::Ended) return;
+
+    if (!target.fainted() && !move->secondaryStatus.empty() &&
+        rng_.chance(static_cast<uint32_t>(move->secondaryChance), 100)) {
+        applyStatus(defSide, move->secondaryStatus);
+    }
+
+    if (moveIndex < 0) {                       // Struggle recoil: 1/4 max HP
+        int recoil = std::max(1, user.stats.hp / 4);
+        user.hp = std::max(0, user.hp - recoil);
+        log_.push_back("|-damage|" + tag(atkSide) + "|" + hpOf(user) + "|[from] recoil");
+        checkFaint(atkSide);
+    }
+}
+
+void Battle::endOfTurn() {
+    int first = 0;
+    int s0 = effSpe(active(0)), s1 = effSpe(active(1));
+    if (s1 > s0 || (s1 == s0 && rng_.chance(1, 2))) first = 1;
+
+    for (int k = 0; k < 2 && phase_ != Phase::Ended; ++k) {
+        int side = k == 0 ? first : 1 - first;
+        auto& p = active(side);
+        if (p.fainted()) continue;
+
+        int dmg = 0;
+        std::string from;
+        if (p.status == "brn") {
+            dmg = p.stats.hp / 16;
+            from = "brn";
+        } else if (p.status == "psn") {
+            dmg = p.stats.hp / 8;
+            from = "psn";
+        } else if (p.status == "tox") {
+            p.toxicN = std::min(15, p.toxicN + 1);
+            dmg = p.stats.hp * p.toxicN / 16;
+            from = "tox";
+        }
+        if (from.empty()) continue;
+
+        p.hp = std::max(0, p.hp - std::max(1, dmg));
+        log_.push_back("|-damage|" + tag(side) + "|" + hpOf(p) + "|[from] " + from);
+        checkFaint(side);
+    }
 }
 
 void Battle::checkFaint(int defSide) {
     if (!active(defSide).fainted()) return;
+    if (needsSwitch_[defSide]) return;         // already flagged this turn
     log_.push_back("|faint|" + tag(defSide));
     if (sides_[defSide].hasReplacement()) {
         needsSwitch_[defSide] = true;
@@ -280,6 +456,7 @@ std::string Battle::serialize() const {
             jp["level"] = p.level;
             jp["hp"] = p.hp;
             jp["maxhp"] = p.stats.hp;
+            jp["status"] = p.status;
             for (const auto& m : p.moves) {
                 jp["moves"].push_back({{"id", m.id}, {"pp", m.pp}});
             }

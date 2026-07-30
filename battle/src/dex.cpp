@@ -69,6 +69,17 @@ Dex Dex::load(const std::filesystem::path& dataDir) {
         mv.accuracy = v.value("accuracy", 100);
         mv.priority = v.value("priority", 0);
         mv.pp = v.value("pp", 5);
+        mv.status = v.value("status", "");
+        if (v.contains("secondary")) {
+            mv.secondaryChance = v["secondary"].value("chance", 0);
+            mv.secondaryStatus = v["secondary"].value("status", "");
+        }
+        if (v.contains("boosts")) {
+            for (const auto& [stat, delta] : v["boosts"].items()) {
+                mv.boosts.emplace_back(stat, delta.get<int>());
+            }
+        }
+        mv.targetSelf = v.value("target", "foe") == std::string("self");
         dex.moves_.emplace(id, std::move(mv));
     }
 

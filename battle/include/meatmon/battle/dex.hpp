@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace mm::battle {
@@ -29,6 +30,11 @@ struct Move {
     int accuracy = 100;              // -1 = never misses
     int priority = 0;
     int pp = 0;
+    std::string status;              // status moves: condition to inflict
+    std::string secondaryStatus;     // damaging moves: chance-based rider
+    int secondaryChance = 0;         // percent
+    std::vector<std::pair<std::string, int>> boosts;  // stat stage changes
+    bool targetSelf = false;         // boosts/status apply to the user
 };
 
 struct Nature {

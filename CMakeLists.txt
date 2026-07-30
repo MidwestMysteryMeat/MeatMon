@@ -46,7 +46,10 @@ target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
 # engine:  window, renderer, fixed-tick loop, assets, tilemap, sprites.
 # apps:    the game executable and the headless battle CLI.
 
+enable_testing()
+
 add_subdirectory(battle)
 add_subdirectory(engine)
 add_subdirectory(apps/game)
 add_subdirectory(apps/battle_cli)
+add_subdirectory(apps/battle_tests)

@@ -24,7 +24,8 @@
     "power": 40,
     "accuracy": 100,
     "priority": 0,
-    "pp": 25
+    "pp": 25,
+    "secondary": { "chance": 10, "status": "brn" }
   },
   "watergun": {
     "name": "Water Gun",
@@ -51,7 +52,8 @@
     "power": 40,
     "accuracy": 100,
     "priority": 0,
-    "pp": 30
+    "pp": 30,
+    "secondary": { "chance": 10, "status": "par" }
   },
   "growl": {
     "name": "Growl",
@@ -60,6 +62,48 @@
     "power": 0,
     "accuracy": 100,
     "priority": 0,
-    "pp": 40
+    "pp": 40,
+    "boosts": { "atk": -1 }
+  },
+  "thunderwave": {
+    "name": "Thunder Wave",
+    "type": "electric",
+    "category": "status",
+    "power": 0,
+    "accuracy": 90,
+    "priority": 0,
+    "pp": 20,
+    "status": "par"
+  },
+  "toxic": {
+    "name": "Toxic",
+    "type": "poison",
+    "category": "status",
+    "power": 0,
+    "accuracy": 90,
+    "priority": 0,
+    "pp": 10,
+    "status": "tox"
+  },
+  "sleeppowder": {
+    "name": "Sleep Powder",
+    "type": "grass",
+    "category": "status",
+    "power": 0,
+    "accuracy": 75,
+    "priority": 0,
+    "pp": 15,
+    "status": "slp"
+  },
+  "swordsdance": {
+    "name": "Swords Dance",
+    "type": "normal",
+    "category": "status",
+    "power": 0,
+    "accuracy": -1,
+    "priority": 0,
+    "pp": 20,
+    "target": "self",
+    "boosts": { "atk": 2 }
   }
 }

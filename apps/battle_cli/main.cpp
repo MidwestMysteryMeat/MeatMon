@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
         Battle battle(dex, Format{}, seed);
         battle.setPlayer(0, "Red", {
             {.species = "emberling", .moves = {"ember", "quickattack", "tackle"}},
-            {.species = "sprigling", .moves = {"vinewhip", "tackle"}},
+            {.species = "sprigling", .moves = {"vinewhip", "sleeppowder", "tackle"}},
         });
         battle.setPlayer(1, "Blue", {
             {.species = "puddlit", .moves = {"watergun", "tackle"}},

@@ -134,10 +134,16 @@ roadmap. Same seed + same choices ⇒ byte-identical log, on every platform.
 
 Implemented now: stat calc (EV/IV/nature), full 18-type chart, STAB, crits,
 damage rolls, accuracy, priority/speed ordering with seeded ties, faint→switch
-flow, win detection, protocol log, JSON state snapshot (`serialize()`).
-Stubbed: status conditions, abilities, items, weather/terrain, multi-target
-formats (Doubles/Triples data model exists in `Format` but mechanics enforce
-singles), full serialization round-trip. See ROADMAP Phase 3.
+flow, win detection, protocol log, JSON state snapshot (`serialize()`);
+status conditions (brn/par/psn/tox/slp/frz) with immunities, turn gates,
+residuals, and burn/para stat effects; stat boosts (±6 stages) from
+data-driven status moves; secondary-effect riders; Struggle with recoil.
+A regression suite (`apps/battle_tests`, run via CTest) pins stat formulas,
+the chart, determinism, and golden status/boost/struggle scenarios.
+Stubbed: volatiles (confusion/flinch/etc.), abilities, items,
+weather/terrain, multi-target formats (Doubles/Triples data model exists in
+`Format` but mechanics enforce singles), full serialization round-trip.
+See ROADMAP Phase 3.
 
 ## 5. Asset pipeline
 

@@ -38,16 +38,23 @@ competitive battles?* If no, it doesn't get a phase.
 
 Runs in parallel with 1–2; `battle/` has no engine dependencies.
 
-- [ ] Status conditions (brn/par/psn/tox/slp/frz), stat boosts, volatiles
+- [x] Status conditions (brn/par/psn/tox/slp/frz): infliction, immunities,
+      turn gates (|cant|), residuals, burn/para stat effects, fire thaw
+- [x] Stat boosts (-6..+6) via data-driven status moves (foe + self targets)
+- [x] Secondary effect riders on damaging moves (chance + status)
+- [x] Struggle (auto when PP dry) with 1/4 recoil
+- [x] Regression suite (`battle_tests`, wired into CTest): stat formulas,
+      type chart, determinism, status/boost/struggle golden scenarios
+- [ ] Volatiles (confusion, flinch, substitute, etc.)
 - [ ] Abilities + items as data + hook points; weather and terrain
-- [ ] Full move effect coverage (secondary effects, multi-hit, charge,
-      protect, switch moves, hazards)
+- [ ] Full move effect coverage (multi-hit, charge, protect, switch moves,
+      hazards, healing, recoil-by-fraction)
 - [ ] Doubles/Triples: multi-slot sides, targeting rules
 - [ ] Generation mechanics switch (1–9): per-gen formula/typechart tables;
       cartridge vs Showdown RNG call-order parity
 - [ ] Team validation (formats, clauses) + team import/export text format
-- [ ] Full state serialization round-trip; golden-log regression suite
-      (same seed + choices ⇒ byte-identical protocol, checked in CI)
+- [ ] Full state serialization round-trip; expand the golden-log suite to
+      per-generation fixtures checked in CI
 
 ## Phase 4 — Scripting & hot-reload everywhere
 
