@@ -21,12 +21,15 @@ public:
     BattleScene(mm::AssetManager& assets, mm::SpriteLibrary& sprites,
                 const mm::battle::Dex& dex, bool autoplay = false);
 
-    void start(uint64_t seed);
+    void start(uint64_t seed,
+               std::string playerName, std::vector<mm::battle::MonsterSet> playerTeam,
+               std::string foeName, std::vector<mm::battle::MonsterSet> foeTeam);
     void handleEvent(const SDL_Event& ev);
     void update();
     void render(SDL_Renderer* r, const mm::Font& font);
 
     bool finished() const { return done_; }
+    bool playerWon() const { return battle_ && battle_->winner() == 0; }
     bool sawMove() const { return sawMove_; }   // selftest probe
 
 private:
@@ -62,5 +65,6 @@ private:
     int sel_ = 0;
     bool done_ = false;
     bool sawMove_ = false;
+    std::string foeName_ = "Foe";
     Slot slots_[2];                             // 0 = player, 1 = foe
 };

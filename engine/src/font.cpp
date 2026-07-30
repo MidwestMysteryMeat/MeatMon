@@ -28,4 +28,24 @@ void Font::draw(SDL_Renderer* r, const std::string& text, float x, float y,
     SDL_SetTextureAlphaMod(tex->handle, 255);
 }
 
+std::string wrapText(std::string text, size_t width) {
+    size_t lineStart = 0;
+    size_t lastSpace = std::string::npos;
+    for (size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == '\n') {
+            lineStart = i + 1;
+            lastSpace = std::string::npos;
+            continue;
+        }
+        if (text[i] == ' ') lastSpace = i;
+        if (i - lineStart >= width && lastSpace != std::string::npos &&
+            lastSpace > lineStart) {
+            text[lastSpace] = '\n';
+            lineStart = lastSpace + 1;
+            lastSpace = std::string::npos;
+        }
+    }
+    return text;
+}
+
 } // namespace mm

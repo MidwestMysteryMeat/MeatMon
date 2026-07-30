@@ -20,7 +20,10 @@ competitive battles?* If no, it doesn't get a phase.
 
 - [ ] Grid movement polish: facing, run/walk speeds, 4-dir character sheets
 - [ ] Camera (follow, map-edge clamp), multi-map loading, warps between maps
-- [ ] Entity set: NPC, Trainer, Item, Building, Warp, Trigger from map JSON
+- [x] Entity set v1: NPC + Trainer from map JSON (`entities` array — sprite,
+      facing, blocking, dialogue, authored teams); engine parses common
+      fields, game-specific fields ride in `extra`
+- [ ] Entity set v2: Item, Building, Warp, Trigger; NPC wander/facing sprites
 - [x] Bitmap font rendering (`mm::Font`, generated ASCII atlas)
 - [ ] Dialogue box + input routing for overworld UI (font exists; box is
       battle-only so far)
@@ -29,14 +32,18 @@ competitive battles?* If no, it doesn't get a phase.
 
 ## Phase 2 — Overworld gameplay
 
-- [ ] Dialogue system with choices + conditionals (flag/var checks)
+- [x] Dialogue box v1: speaker + wrapped lines from entity data, Z advances,
+      trainer intro/defeated variants, flows into battles
+- [ ] Dialogue v2: choices + conditionals (flag/var checks), typewriter text
 - [ ] Encounters: grass/cave tables per map (species, levels, rates)
 - [ ] Inventory/bag, party management UI, PC storage boxes, Pokédex flags
 - [x] Battle transition + battle scene v1 (pure view over the protocol log):
       animated HP bars, move menu driven by `Request`, faint-switch menu,
       humanized message box, sprite slots via `SpriteLibrary`, flee (Esc)
 - [ ] Battle scene v2: attack/faint animations, exp bar, catch flow
-- [ ] Trainer battles from entity data (line-of-sight, reward money)
+- [x] Trainer battles from entity data (talk to fight, defeat remembered for
+      the session, `teamFromJson` shared with saves/network)
+- [ ] Trainer polish: line-of-sight engagement, reward money, rematch rules
 
 ## Phase 3 — Battle engine to competitive depth (highest priority track)
 

@@ -36,41 +36,19 @@ std::string statName(const std::string& s) {
     return s;
 }
 
-std::string wrapText(std::string s, size_t width) {
-    size_t lineStart = 0;
-    size_t lastSpace = std::string::npos;
-    for (size_t i = 0; i < s.size(); ++i) {
-        if (s[i] == ' ') lastSpace = i;
-        if (i - lineStart >= width && lastSpace != std::string::npos &&
-            lastSpace > lineStart) {
-            s[lastSpace] = '\n';
-            lineStart = lastSpace + 1;
-            lastSpace = std::string::npos;
-        }
-    }
-    return s;
-}
-
 } // namespace
 
 BattleScene::BattleScene(AssetManager& assets, SpriteLibrary& sprites,
                          const Dex& dex, bool autoplay)
     : assets_(assets), sprites_(sprites), dex_(dex), auto_(autoplay) {}
 
-void BattleScene::start(uint64_t seed) {
+void BattleScene::start(uint64_t seed,
+                        std::string playerName, std::vector<MonsterSet> playerTeam,
+                        std::string foeName, std::vector<MonsterSet> foeTeam) {
+    foeName_ = foeName;
     battle_ = std::make_unique<Battle>(dex_, Format{}, seed);
-    battle_->setPlayer(0, "Player", {
-        {.species = "emberling", .ability = "blaze", .item = "leftovers",
-         .moves = {"ember", "quickattack", "tackle", "growl"}},
-        {.species = "sprigling", .ability = "overgrow",
-         .moves = {"vinewhip", "sleeppowder", "tackle", "growl"}},
-    });
-    battle_->setPlayer(1, "Rival", {
-        {.species = "puddlit", .ability = "intimidate", .item = "snackberry",
-         .moves = {"watergun", "headbutt", "growl"}},
-        {.species = "zapkin", .ability = "static",
-         .moves = {"thundershock", "quickattack", "swordsdance"}},
-    });
+    battle_->setPlayer(0, std::move(playerName), std::move(playerTeam));
+    battle_->setPlayer(1, std::move(foeName), std::move(foeTeam));
     battle_->start();
     cursor_ = 0;
     msgs_.clear();
@@ -117,7 +95,7 @@ void BattleScene::pushHuman(const std::string& line) {
     } else if (t == "switch") {
         msgs_.push_back(arg(2).rfind("p1", 0) == 0
                             ? "Go! " + who(arg(2)) + "!"
-                            : "Rival sent out " + who(arg(2)).substr(4) + "!");
+                            : foeName_ + " sent out " + who(arg(2)).substr(4) + "!");
     } else if (t == "-damage") {
         std::string from = arg(4);
         if (from == "[from] brn") msgs_.push_back(who(arg(2)) + " is hurt by its burn!");

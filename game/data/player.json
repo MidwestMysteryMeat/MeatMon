@@ -1,0 +1,18 @@
+{
+  "name": "Player",
+  "team": [
+    {
+      "species": "emberling",
+      "level": 50,
+      "ability": "blaze",
+      "item": "leftovers",
+      "moves": ["ember", "quickattack", "tackle", "growl"]
+    },
+    {
+      "species": "sprigling",
+      "level": 50,
+      "ability": "overgrow",
+      "moves": ["vinewhip", "sleeppowder", "tackle", "growl"]
+    }
+  ]
+}

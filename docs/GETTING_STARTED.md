@@ -18,12 +18,23 @@ Run from the repo root so the exe finds `game/`:
 build\apps\game\Debug\meatmon.exe
 ```
 
-- Arrows / WASD — walk (grid-stepped, collision from the map's layer)
-- **B** — start a battle: full in-window battle scene with HP bars, a move
-  menu (arrows + Z/Enter), faint-switch menu, and battle messages. Esc flees.
-  The scene is a pure view over the same Showdown-style protocol log the
-  headless CLI prints.
+- Arrows / WASD — walk (grid-stepped, collision from the map's layer; NPCs block)
+- **Z / Enter** — talk to the NPC or trainer you're facing. Trainer dialogue
+  flows straight into a battle with their authored team; beat them and their
+  dialogue changes.
+- **B** — shortcut: fight the map's trainer immediately
+- In battle: arrows pick a move, Z/Enter confirms, Esc flees. The scene is a
+  pure view over the same Showdown-style protocol log the headless CLI prints.
 - Esc (overworld) — quit
+
+## Author an NPC or trainer (no code)
+
+Entities live in the map file (`game/maps/demo.json`, `"entities"` array).
+An NPC is a sprite slug, a tile position, and dialogue lines; a trainer adds
+a `team` (same JSON shape as `game/data/player.json` — species, level,
+ability, item, moves, optional nature/EVs/IVs) and an optional
+`defeatedDialogue`. Save the file while the game runs — the map hot-reloads,
+entities included. The player's own team is `game/data/player.json`.
 
 Headless battle (no window, full battle to completion + JSON snapshot):
 

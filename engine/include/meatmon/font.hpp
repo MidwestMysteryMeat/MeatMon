@@ -19,4 +19,7 @@ struct Font {
     }
 };
 
+// Greedy word wrap: replaces spaces with newlines so no line exceeds width.
+std::string wrapText(std::string text, size_t width);
+
 } // namespace mm

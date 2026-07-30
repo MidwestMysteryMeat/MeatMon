@@ -39,6 +39,20 @@ bool Tilemap::load(const std::filesystem::path& file, Tilemap& out) {
     readLayer("objects", m.objects);
     readLayer("collision", m.collision);
 
+    if (j.contains("entities") && j["entities"].is_array()) {
+        for (const auto& e : j["entities"]) {
+            MapEntity ent;
+            ent.type = e.value("type", "npc");
+            ent.id = e.value("id", "");
+            ent.sprite = e.value("sprite", "");
+            ent.facing = e.value("facing", "down");
+            ent.x = e.value("x", 0);
+            ent.y = e.value("y", 0);
+            ent.extra = e;
+            m.entities.push_back(std::move(ent));
+        }
+    }
+
     out = std::move(m);
     return true;
 }

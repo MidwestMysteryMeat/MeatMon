@@ -82,14 +82,19 @@ New-Png 128 84 "game/assets/fonts/mono.png" {
     $font.Dispose()
 }
 
-# --- player (16x16) -----------------------------------------------------------
-New-Png 16 16 "game/assets/custom/player/front.png" {
-    param($g, $bmp)
-    $g.FillRectangle((B 236 188 148), 5, 2, 6, 5)     # head
-    $g.FillRectangle((B 200 48 48), 4, 7, 8, 5)       # jacket
-    $g.FillRectangle((B 40 56 88), 5, 12, 2, 3)       # legs
-    $g.FillRectangle((B 40 56 88), 9, 12, 2, 3)
-    $bmp.SetPixel(6, 4, [System.Drawing.Color]::FromArgb(255, 20, 20, 20))  # eyes
-    $bmp.SetPixel(9, 4, [System.Drawing.Color]::FromArgb(255, 20, 20, 20))
+# --- people (16x16): player + NPCs, same body different jacket ----------------
+function New-Person([string]$slug, [int]$jr, [int]$jg, [int]$jb) {
+    New-Png 16 16 "game/assets/custom/$slug/front.png" {
+        param($g, $bmp)
+        $g.FillRectangle((B 236 188 148), 5, 2, 6, 5)     # head
+        $g.FillRectangle((B $jr $jg $jb), 4, 7, 8, 5)     # jacket
+        $g.FillRectangle((B 40 56 88), 5, 12, 2, 3)       # legs
+        $g.FillRectangle((B 40 56 88), 9, 12, 2, 3)
+        $bmp.SetPixel(6, 4, [System.Drawing.Color]::FromArgb(255, 20, 20, 20))  # eyes
+        $bmp.SetPixel(9, 4, [System.Drawing.Color]::FromArgb(255, 20, 20, 20))
+    }.GetNewClosure()
 }
+New-Person "player"   200 48 48    # red
+New-Person "rival"    148 72 200   # purple
+New-Person "villager" 72 148 88    # green
 Write-Host "placeholders regenerated"

@@ -48,5 +48,52 @@
     ]
   },
   "warps": [],
-  "events": []
+  "events": [],
+  "entities": [
+    {
+      "type": "npc",
+      "id": "villager",
+      "name": "Villager",
+      "sprite": "villager",
+      "x": 8,
+      "y": 4,
+      "facing": "down",
+      "dialogue": [
+        "Welcome to the MeatMon engine demo!",
+        "Drop a PNG into assets/custom while playing and it hot-reloads.",
+        "The trainer to the east never shuts up about her Puddlit."
+      ]
+    },
+    {
+      "type": "trainer",
+      "id": "rival",
+      "name": "Rival",
+      "sprite": "rival",
+      "x": 12,
+      "y": 8,
+      "facing": "down",
+      "dialogue": [
+        "You again! My Puddlit is unbeatable.",
+        "Let's battle!"
+      ],
+      "defeatedDialogue": [
+        "Fine. You won. Once."
+      ],
+      "team": [
+        {
+          "species": "puddlit",
+          "level": 50,
+          "ability": "intimidate",
+          "item": "snackberry",
+          "moves": ["watergun", "headbutt", "growl"]
+        },
+        {
+          "species": "zapkin",
+          "level": 50,
+          "ability": "static",
+          "moves": ["thundershock", "quickattack", "swordsdance"]
+        }
+      ]
+    }
+  ]
 }
