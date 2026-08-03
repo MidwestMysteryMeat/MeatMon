@@ -247,9 +247,12 @@ bool Battle::choose(int side, Choice choice) {
         auto& s = sides_[side];
         if (choice.index < 0 || choice.index >= static_cast<int>(s.monsters.size())) return false;
         if (choice.index == s.active || s.monsters[choice.index].fainted()) return false;
+        needsSwitch_[side] = false;        // this switch resolves the flag; clear it
+                                           // BEFORE hazards so an entry faint gets a
+                                           // proper faint log + win check in checkFaint
         switchIn(side, choice.index);
+        if (phase_ == Phase::Ended) return true;   // hazards fainted the last able mon
         onSwitchInAbility(side);
-        needsSwitch_[side] = active(side).fainted();   // hazards may faint on entry
         if (!needsSwitch_[0] && !needsSwitch_[1]) beginTurn();
         return true;
     }

@@ -625,7 +625,17 @@ void EditorUI::drawBattlePanel() {
                     }
                     p1.push_back(std::move(set));
                 }
-                auto p2 = teamFromJson(trainers[foeSel_]->extra["team"]);
+                // const operator[] on a missing key is documented UB in
+                // nlohmann and is not catchable by the try around this block.
+                const auto& foeExtra = trainers[foeSel_]->extra;
+                if (!foeExtra.contains("team")) {
+                    // Throw rather than return: this sits inside the panel's
+                    // try, and returning here would skip the ImGui::End() below
+                    // and corrupt the ImGui stack.
+                    throw std::runtime_error("trainer '" + trainers[foeSel_]->id +
+                                             "' has no team");
+                }
+                auto p2 = teamFromJson(foeExtra["team"]);
                 Battle b(hooks_.dex(), Format{}, static_cast<uint64_t>(seed_));
                 b.setPlayer(0, teamPlayerName_, p1);
                 b.setPlayer(1, trainers[foeSel_]->extra.value("name", "Trainer"), p2);

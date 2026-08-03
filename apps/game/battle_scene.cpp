@@ -395,13 +395,26 @@ void BattleScene::render(SDL_Renderer* r, const Font& font) {
         font.draw(r, "Choose next monster:", 10, 143, {160, 172, 200, 255});
         Request req = battle_->request(0);
         const Side& side = battle_->side(0);
-        for (int i = 0; i < static_cast<int>(req.switches.size()) && i < 2; ++i) {
+        // Only two rows fit, but the cursor cycles every eligible switch-in
+        // (a full party offers five). Drawing a fixed first-two window meant
+        // confirming a monster that was never on screen — scroll the window
+        // so the selected entry is always the one being shown.
+        const int total = static_cast<int>(req.switches.size());
+        constexpr int kVisible = 2;
+        int first = 0;
+        if (sel_ >= kVisible) first = std::min(sel_ - kVisible + 1, std::max(0, total - kVisible));
+        for (int row = 0; row < kVisible && first + row < total; ++row) {
+            const int i = first + row;
             const BattleMonster& m = side.monsters[req.switches[i]];
-            float y = 158 + i * 14;
+            float y = 158 + row * 14;
             if (i == sel_) font.draw(r, ">", 12, y, {255, 224, 96, 255});
             font.draw(r, m.name + "  " + std::to_string(m.hp) + "/" +
                           std::to_string(m.stats.hp),
                       24, y);
+        }
+        if (total > kVisible) {
+            font.draw(r, std::to_string(sel_ + 1) + "/" + std::to_string(total), 250, 186,
+                      {160, 172, 200, 255});
         }
     }
 }

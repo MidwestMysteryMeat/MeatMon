@@ -77,6 +77,11 @@ long long expForLevel(int level) {
 
 int gainExp(MonsterSet& set, int gained) {
     if (set.level >= 100 || gained <= 0) return 0;
+    // Mons authored above level 1 ship with exp 0; seed the cumulative total
+    // for their current level so the next level is one delta away, not the
+    // full cubic total from level 1.
+    long long baseline = expForLevel(set.level);
+    if (set.exp < baseline) set.exp = static_cast<int>(baseline);
     set.exp += gained;
     int levels = 0;
     while (set.level < 100 && set.exp >= expForLevel(set.level + 1)) {

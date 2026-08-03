@@ -286,9 +286,14 @@ private:
         const char* key = (e->type == "trainer" && beaten) ? "defeatedDialogue"
                                                            : "dialogue";
         dlg_.clear();
-        if (e->extra.contains(key)) {
+        if (e->extra.contains(key) && e->extra[key].is_array()) {
             for (const auto& line : e->extra[key]) {
-                dlg_.push_back(line.get<std::string>());
+                if (line.is_string()) {
+                    dlg_.push_back(line.get<std::string>());
+                } else {
+                    SDL_Log("entity %s: non-string %s line skipped",
+                            e->id.c_str(), key);
+                }
             }
         }
         if (dlg_.empty()) dlg_.push_back("...");
@@ -353,21 +358,37 @@ private:
     void startPendingBattle() {
         battleScene_ = std::make_unique<BattleScene>(*assets_, *spriteLib_, *dex_,
                                                      selftest_);
-        if (pendingWild_) {
+        // Battle::start() throws for any unknown species/move/ability/item id;
+        // trainer teams and encounter tables are free-text-authored JSON, so a
+        // typo must surface as a message, not a std::terminate.
+        try {
+            if (pendingWild_) {
+                battleScene_->start(0x5EED0000ULL + ticks_, playerName_, playerTeam_,
+                                    "Wild", {wildMon_}, /*wild=*/true);
+                mode_ = Mode::Battle;
+                return;
+            }
+            auto foeTeam = pendingTrainer_.extra.contains("team")
+                               ? battle::teamFromJson(pendingTrainer_.extra["team"])
+                               : std::vector<battle::MonsterSet>{};
+            if (foeTeam.empty()) {
+                SDL_Log("trainer %s has no team", pendingTrainer_.id.c_str());
+                mode_ = Mode::Overworld;
+                return;
+            }
             battleScene_->start(0x5EED0000ULL + ticks_, playerName_, playerTeam_,
-                                "Wild", {wildMon_}, /*wild=*/true);
+                                pendingTrainer_.extra.value("name", "Trainer"), foeTeam);
             mode_ = Mode::Battle;
-            return;
+        } catch (const std::exception& e) {
+            SDL_Log("battle start failed (%s): %s",
+                    pendingWild_ ? "wild encounter"
+                                 : pendingTrainer_.id.c_str(),
+                    e.what());
+            battleScene_.reset();
+            pendingWild_ = false;
+            pendingTrainer_ = MapEntity{};
+            toast(std::string("(Battle data error: ") + e.what() + ")");
         }
-        auto foeTeam = battle::teamFromJson(pendingTrainer_.extra["team"]);
-        if (foeTeam.empty()) {
-            SDL_Log("trainer %s has no team", pendingTrainer_.id.c_str());
-            mode_ = Mode::Overworld;
-            return;
-        }
-        battleScene_->start(0x5EED0000ULL + ticks_, playerName_, playerTeam_,
-                            pendingTrainer_.extra.value("name", "Trainer"), foeTeam);
-        mode_ = Mode::Battle;
     }
 
     void endBattle() {
@@ -396,8 +417,16 @@ private:
         if (battleScene_->playerWon() && !pendingTrainer_.id.empty()) {
             defeated_.insert(pendingTrainer_.id);
         }
-        if (battleScene_->caught() && playerTeam_.size() < 6) {
-            playerTeam_.push_back(battleScene_->caughtSet());
+        if (battleScene_->caught()) {
+            if (playerTeam_.size() < 6) {
+                playerTeam_.push_back(battleScene_->caughtSet());
+            } else {
+                // There is no storage box yet, so a full party means the catch
+                // is lost. Say so — it used to vanish silently right after
+                // "Gotcha! ... was caught!".
+                toast(battleScene_->caughtSet().species +
+                      " had nowhere to go - your party is full and it got away.");
+            }
         }
         pendingTrainer_ = MapEntity{};
         pendingWild_ = false;
@@ -525,12 +554,42 @@ private:
         tryWildEncounter();
     }
 
+    // Clamp (tx, ty) into `m` and, if it's solid, walk outward ring by ring to
+    // the nearest walkable tile. Returns false when the map has none: warping
+    // there would strand the player, and Esc-autosave would persist the softlock.
+    static bool findLandingTile(const Tilemap& m, int& tx, int& ty) {
+        tx = std::clamp(tx, 0, m.width - 1);
+        ty = std::clamp(ty, 0, m.height - 1);
+        if (!m.solid(tx, ty)) return true;
+        int maxR = std::max(m.width, m.height);
+        for (int r = 1; r < maxR; ++r) {
+            for (int dy = -r; dy <= r; ++dy) {
+                for (int dx = -r; dx <= r; ++dx) {
+                    if (std::max(std::abs(dx), std::abs(dy)) != r) continue;
+                    int nx = tx + dx, ny = ty + dy;
+                    if (nx >= 0 && ny >= 0 && nx < m.width && ny < m.height &&
+                        !m.solid(nx, ny)) {
+                        tx = nx;
+                        ty = ny;
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     void loadMap(const std::string& name, int tx, int ty) {
         std::filesystem::path path = gameDir_ / "maps" / (name + ".json");
         Tilemap fresh;
         if (!Tilemap::load(path, fresh)) {
             SDL_Log("failed to load map %s", path.string().c_str());
             return;
+        }
+        if (!findLandingTile(fresh, tx, ty)) {
+            SDL_Log("warp to %s (%d,%d) refused: no walkable landing tile",
+                    name.c_str(), tx, ty);
+            return;                          // stay on the current map
         }
         map_ = std::move(fresh);
         mapPath_ = path;
@@ -580,7 +639,13 @@ private:
     }
 
     void beginWildEncounter(const nlohmann::json& entry) {
+        // Map JSON is hand-authored: clamp levels to the legal range and fix
+        // an inverted min/max before feeding Prng::range (whose unsigned span
+        // cast turns hi < lo into a ~4-billion-wide roll).
         int lo = entry.value("min", 5), hi = entry.value("max", lo);
+        lo = std::clamp(lo, 1, 100);
+        hi = std::clamp(hi, 1, 100);
+        if (hi < lo) std::swap(lo, hi);
         wildMon_ = battle::MonsterSet{};
         wildMon_.species = entry.value("species", "");
         wildMon_.level = encounterRng_.range(lo, hi + 1);
